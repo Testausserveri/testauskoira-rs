@@ -1,0 +1,33 @@
+[package]
+name = "testauskoira-rs"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+
+[dependencies.serenity]
+version = "*"
+default-features = false
+features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework"]
+
+[dependencies.tokio]
+version = "*"
+features = ["macros", "rt-multi-thread","signal"]
+
+[dependencies.sqlx]
+version = "*"
+features = ["mysql","runtime-tokio-rustls","all-databases","bigdecimal"]
+
+[dependencies]
+regex = {version = "*", features = ["default"]}
+dotenv = "*"
+tracing = "*"
+tracing-subscriber = "*"
+futures = "*"
+num-traits = "*"
