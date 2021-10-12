@@ -12,22 +12,31 @@ opt-level = 0
 opt-level = 3
 
 [dependencies.serenity]
-version = "*"
+version = "0.10"
 default-features = false
 features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework"]
 
 [dependencies.tokio]
-version = "*"
+version = "1.12"
 features = ["macros", "rt-multi-thread","signal"]
 
 [dependencies.sqlx]
-version = "*"
-features = ["mysql","runtime-tokio-rustls","all-databases","bigdecimal"]
+version = "0.5"
+features = ["mysql","runtime-tokio-rustls","bigdecimal"]
+
+[dependencies.imap]
+version = "3.0.0-alpha.4"
+default-features = false
+features = ["rustls-tls","rustls-connector"]
 
 [dependencies]
-regex = {version = "*", features = ["default"]}
-dotenv = "*"
-tracing = "*"
-tracing-subscriber = "*"
-futures = "*"
-num-traits = "*"
+regex = {version = "1.5", features = ["default"]}
+dotenv = "0.15"
+tracing = "0.1"
+tracing-futures = "0.2"
+tracing-subscriber = "0.2"
+futures = "0.3"
+num-traits = "0.2"
+rand = "0.8"
+photon-rs = "0.3"
+rustls = "0.20" 
