@@ -24,11 +24,6 @@ features = ["macros", "rt-multi-thread","signal"]
 version = "0.5"
 features = ["mysql","runtime-tokio-rustls","bigdecimal"]
 
-[dependencies.imap]
-version = "3.0.0-alpha.4"
-default-features = false
-features = ["rustls-tls","rustls-connector"]
-
 [dependencies]
 regex = {version = "1.5", features = ["default"]}
 dotenv = "0.15"
@@ -40,3 +35,6 @@ num-traits = "0.2"
 rand = "0.8"
 photon-rs = "0.3"
 rustls = "0.20" 
+reqwest = {version = "0.11", features = ["rustls-tls"]}
+clokwerk = "0.3.5"
+chrono = "0.4"

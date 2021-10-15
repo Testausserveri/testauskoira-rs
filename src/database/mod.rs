@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use serenity::prelude::TypeMapKey;
 use sqlx::MySqlPool;
-pub mod mail;
 pub mod message_logging;
 
 pub struct Database {

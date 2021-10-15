@@ -1,8 +1,8 @@
+#![feature(async_closure)]
 pub mod commands;
 pub mod database;
 pub mod extensions;
-
-extern crate imap;
+pub mod utils;
 
 use commands::owner::*;
 use database::Database;
@@ -16,9 +16,12 @@ use serenity::{
     http::Http,
     model::{event::ResumedEvent, gateway::Ready},
     prelude::*,
+    model::prelude::*,
 };
 
-use serenity::model::prelude::*;
+use clokwerk::{Scheduler, TimeUnits};
+use clokwerk::Interval::*;
+
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
@@ -69,16 +72,7 @@ async fn main() {
 
     let database = Database::new()
         .await;
-
-    let domain = "imap.example.com";
-    let client = imap::ClientBuilder::new(&domain, 993).rustls().unwrap();
-    let mut imap_session = client.login("ville@testausserveri", "password").map_err(|e| e.0).unwrap();
-
-    imap_session.select("INBOX").unwrap();
-
-    info!("{}",database.get_user_by_mailbox("ville@testausserveri.fi").await.unwrap());
-    info!("{:?}",database.get_registered_users().await.unwrap());
-
+    
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let http = Http::new_with_token(&token);
@@ -118,6 +112,17 @@ async fn main() {
             .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut scheduler = Scheduler::with_tz(chrono::Local);
+
+    let db = client.data.read().await.get::<Database>().unwrap().clone();
+
+    scheduler.every(10.seconds()).run(move || {
+        if let Ok(_) = runtime.block_on(db.get_total_messages()) {};
+    });
+
+    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
 
     if let Err(why) = client.start().await {
         error!("Client error: {}", why);

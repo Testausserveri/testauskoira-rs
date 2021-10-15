@@ -10,16 +10,19 @@ impl Database {
             .execute(&mut conn)
             .await
     }
-    pub async fn get_total_messages(&self) -> Result<u64, sqlx::Error> {
+    pub async fn get_total_messages(&self) -> Result<Option<u64>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
         let value = sqlx::query_scalar!(
             "SELECT SUM(`message_count`) FROM `messages_day_stat` WHERE `date` = CURDATE()"
         )
-        .fetch_optional(&mut conn)
-        .await?
-        .unwrap()
-        .unwrap();
-        Ok(value.to_u64().unwrap())
+        .fetch_one(&mut conn)
+        .await?;
+
+        let value = match value {
+            Some(e) => e,
+            None => return Ok(None),
+        };
+        Ok(Some(value.to_u64().unwrap()))
     }
     pub async fn get_most_active(&self) -> Result<Vec<(u64,i32)>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
