@@ -111,13 +111,6 @@ async fn main() {
 
     let shard_manager = client.shard_manager.clone();
 
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
-    });
-
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
@@ -128,7 +121,15 @@ async fn main() {
         runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
     
-    let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(60000));
+    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
+
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
+        thread_handle.stop();
+        shard_manager.lock().await.shutdown_all().await;
+    });
 
     if let Err(why) = client.start().await {
         error!("Client error: {}", why);
