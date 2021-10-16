@@ -6,6 +6,7 @@ pub mod utils;
 
 use commands::{owner::*, links::*};
 use database::Database;
+use utils::winner_showcase::*;
 
 use std::{collections::HashSet, env, sync::Arc};
 
@@ -73,7 +74,6 @@ async fn main() {
         .await;
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-
     let http = Http::new_with_token(&token);
 
     let (owners, _bot_id) = match http.get_current_application_info().await {
@@ -116,12 +116,13 @@ async fn main() {
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
     let db = client.data.read().await.get::<Database>().unwrap().clone();
+    let http = client.cache_and_http.http.clone();
 
-    scheduler.every(10.seconds()).run(move || {
-        if let Ok(_) = runtime.block_on(db.get_total_messages()) {};
+    scheduler.every(1.day()).at("00:00").run(move || {
+        runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
-
-    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
+    
+    let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
 
     if let Err(why) = client.start().await {
         error!("Client error: {}", why);

@@ -24,9 +24,9 @@ impl Database {
         };
         Ok(Some(value.to_u64().unwrap()))
     }
-    pub async fn get_most_active(&self) -> Result<Vec<(u64,i32)>, sqlx::Error> {
+    pub async fn get_most_active(&self, winner_count: u64) -> Result<Vec<(u64,i32)>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
-        let members = sqlx::query!("SELECT `userid` as `userid!`,`message_count` as `message_count!` FROM `messages_day_stat` WHERE `date` = SUBDATE(CURRENT_DATE, 0) ORDER BY `message_count` DESC LIMIT 5")
+        let members = sqlx::query!("SELECT `userid` as `userid!`,`message_count` as `message_count!` FROM `messages_day_stat` WHERE `date` = SUBDATE(CURRENT_DATE, 0) ORDER BY `message_count` DESC LIMIT ?",winner_count)
             .fetch_all(&mut conn)
             .await?;
         let members = members.iter().map(|member| {

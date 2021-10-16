@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serenity::prelude::TypeMapKey;
+use serenity::{client::Client,prelude::TypeMapKey};
 use sqlx::MySqlPool;
 pub mod message_logging;
 
