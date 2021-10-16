@@ -4,7 +4,7 @@ pub mod database;
 pub mod extensions;
 pub mod utils;
 
-use commands::owner::*;
+use commands::{owner::*, links::*};
 use database::Database;
 
 use std::{collections::HashSet, env, sync::Arc};
@@ -56,7 +56,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(quit)]
+#[commands(quit, github)]
 struct General;
 
 #[tokio::main]
