@@ -4,7 +4,7 @@ pub mod database;
 pub mod extensions;
 pub mod utils;
 
-use commands::owner::*;
+use commands::{owner::*, links::*};
 use database::Database;
 
 use std::{collections::HashSet, env, sync::Arc};
@@ -20,7 +20,6 @@ use serenity::{
 };
 
 use clokwerk::{Scheduler, TimeUnits};
-use clokwerk::Interval::*;
 
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -57,7 +56,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(quit)]
+#[commands(quit, github)]
 struct General;
 
 #[tokio::main]
@@ -72,7 +71,7 @@ async fn main() {
 
     let database = Database::new()
         .await;
-    
+
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let http = Http::new_with_token(&token);
