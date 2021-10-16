@@ -2258,7 +2258,6 @@ dependencies = [
  "num-traits",
  "photon-rs",
  "rand 0.8.4",
- "rayon",
  "regex",
  "reqwest",
  "rustls 0.20.0",

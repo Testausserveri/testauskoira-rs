@@ -20,7 +20,6 @@ use serenity::{
 };
 
 use clokwerk::{Scheduler, TimeUnits};
-use clokwerk::Interval::*;
 
 use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
@@ -72,7 +71,7 @@ async fn main() {
 
     let database = Database::new()
         .await;
-    
+
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let http = Http::new_with_token(&token);
