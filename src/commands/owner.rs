@@ -3,6 +3,8 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 use crate::ShardManagerContainer;
+use crate::utils::winner_showcase::display_winner;
+use crate::database::Database;
 
 #[command]
 #[owners_only]
@@ -19,5 +21,13 @@ async fn quit(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
 
+    Ok(())
+}
+
+#[command]
+#[owners_only]
+async fn award_ceremony(ctx: &Context, _msg: &Message) -> CommandResult {
+    let db = ctx.data.read().await.get::<Database>().unwrap().clone();
+    display_winner(ctx.http.to_owned(), db.to_owned()).await;
     Ok(())
 }

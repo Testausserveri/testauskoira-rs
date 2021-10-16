@@ -63,7 +63,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(quit, github)]
+#[commands(quit, github, award_ceremony)]
 struct General;
 
 #[tokio::main]
@@ -120,6 +120,7 @@ async fn main() {
     scheduler.every(1.day()).at("23:59").run(move || {
         runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
+
     
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
 
