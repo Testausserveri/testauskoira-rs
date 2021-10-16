@@ -57,7 +57,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(quit, github)]
+#[commands(quit, github, award_ceremony)]
 struct General;
 
 #[tokio::main]
