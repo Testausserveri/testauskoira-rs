@@ -1,16 +1,20 @@
-use serenity::{model::{guild::Member,id::{GuildId,ChannelId}},http::client::Http};
+use serenity::{model::{guild::Member,id::ChannelId},http::client::Http};
 use crate::database::Database;
 use std::sync::Arc;
+use std::env;
 
 pub async fn display_winner(http: Arc<Http>,db: Arc<Database>) {
     let winners = db.get_most_active(5).await.unwrap();
+
+    let channel = ChannelId::from(env::var("AWARD_CHANNEL").unwrap().parse::<u64>().unwrap());
+
+    let guild = channel.to_channel(http.clone()).await.unwrap().guild().unwrap().guild_id;
     
     let httpclone = http.clone();
 
     let futs = winners.into_iter().map(|w| {
         let (w,m) = w;
-        let guild = GuildId::from(880127231664459806);
-        let member= guild.member(httpclone.clone(),w.clone());
+        let member = guild.member(httpclone.clone(),w.clone());
         (member,m)
     }).map(|w| async {
         let (w,m) = w;
@@ -29,7 +33,7 @@ pub async fn display_winner(http: Arc<Http>,db: Arc<Database>) {
 
     let img_name = super::build_award::build_award_image(&winners[0].0.face()).await.unwrap();
 
-    ChannelId::from(880127231664459809).send_message(http.clone(),|m| {
+    channel.send_message(http.clone(),|m| {
         m.add_file(std::path::Path::new(&img_name));        
         m.embed(|e| {
             e.title("Most active members");

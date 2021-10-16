@@ -39,9 +39,15 @@ impl EventHandler for Handler {
         info!("Connected as {}", ready.user.name);
     }
 
-    async fn message(&self, ctx: Context, new_message: Message) {
+    async fn message(&self, ctx: Context, msg: Message) {
         let db = ctx.data.read().await.get::<Database>().unwrap().clone();
-        if let Ok(_) = db.increment_message_count(&new_message.author.id.as_u64()).await {};
+        let words = std::fs::read_to_string("blacklist.txt").expect("Expected blacklist.txt in running directory");
+        if let Ok(_) = db.increment_message_count(&msg.author.id.as_u64()).await {};
+        for w in words.lines() {
+            if msg.content.contains(w) {
+                if let Ok(_) = msg.delete(&ctx.http).await {};
+            }
+        }
     }
 
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
@@ -105,24 +111,26 @@ async fn main() {
 
     let shard_manager = client.shard_manager.clone();
 
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
-    });
-
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
     let db = client.data.read().await.get::<Database>().unwrap().clone();
     let http = client.cache_and_http.http.clone();
 
-    scheduler.every(1.day()).at("00:00").run(move || {
+    scheduler.every(1.day()).at("23:59").run(move || {
         runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
 
-    let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
+    
+    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
+
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
+        thread_handle.stop();
+        shard_manager.lock().await.shutdown_all().await;
+    });
 
     if let Err(why) = client.start().await {
         error!("Client error: {}", why);
