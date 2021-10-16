@@ -118,11 +118,11 @@ async fn main() {
     let db = client.data.read().await.get::<Database>().unwrap().clone();
     let http = client.cache_and_http.http.clone();
 
-    scheduler.every(1.day()).at("00:00").run(move || {
+    scheduler.every(1.day()).at("23:59").run(move || {
         runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
     
-    let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
+    let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(60000));
 
     if let Err(why) = client.start().await {
         error!("Client error: {}", why);
