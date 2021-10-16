@@ -39,9 +39,15 @@ impl EventHandler for Handler {
         info!("Connected as {}", ready.user.name);
     }
 
-    async fn message(&self, ctx: Context, new_message: Message) {
+    async fn message(&self, ctx: Context, msg: Message) {
         let db = ctx.data.read().await.get::<Database>().unwrap().clone();
-        if let Ok(_) = db.increment_message_count(&new_message.author.id.as_u64()).await {};
+        let words = std::fs::read_to_string("blacklist.txt").expect("Expected blacklist.txt in running directory");
+        if let Ok(_) = db.increment_message_count(&msg.author.id.as_u64()).await {};
+        for w in words.lines() {
+            if msg.content.contains(w) {
+                if let Ok(_) = msg.delete(&ctx.http).await {};
+            }
+        }
     }
 
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
