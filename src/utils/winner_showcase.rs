@@ -18,7 +18,7 @@ pub async fn display_winner(http: Arc<Http>,db: Arc<Database>) {
     });
 
     let tasks: Vec<_> = futs.map(|w| {
-        tokio::spawn(w) 
+        tokio::spawn(w)
     }).collect();
 
     let winners: Vec<(Member,i32)> = futures::future::join_all(tasks)

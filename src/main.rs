@@ -121,7 +121,7 @@ async fn main() {
     scheduler.every(1.day()).at("00:00").run(move || {
         runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
     });
-    
+
     let _thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
 
     if let Err(why) = client.start().await {
