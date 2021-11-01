@@ -5,7 +5,7 @@
 **Testauskoira-rs** on yleisbotti, jota käytetään erilaisissa [Testausserverin](https://testausserveri.fi) kylmää konetta vaativissa tehtävissä Discordin puolella. Botin tarkoituksena on tukea palvelimen toimintaa. Tämä README.md on varastettu suoraan originaalin testauskoiran repoista.
 
 Botin toimintaa ja sen tietoturvallisuutta voi tutkia tässä repositoriossa, johon on sen lähdekoodi julkaistuna kokonaisuudessaan läpinäkyvyyttä varten.
-Otamme mieluusti vastaan myös kaikenmuotoisia ominauisuuksia, jos haluat sellaisen koodata ja tehdä pr. Myös issuesissa voit antaa feature requestejä, joita ylläpitäjät tai muut vapaaehtoiset voivat toteuttaa.
+Otamme mieluusti vastaan myös kaikenmuotoisia ominaisuuksia, jos haluat sellaisen koodata ja tehdä pr. Myös issuesissa voit antaa feature requestejä, joita ylläpitäjät tai muut vapaaehtoiset voivat toteuttaa.
 
 Parhaiten apua bottiin saa discordista käyttäjältä DrVilepis#5329.
 
