@@ -26,3 +26,21 @@ Käyttäjät voivat kutsua itsensä Testausserverin GitHub-organisaatioon sisä�
 ### Kielletyn sisällön moderoiminen
 
 Botti poistaa kaikki kielletyt tekstinpätkät jotka löytyvät blacklist.txt tiedostosta tässä repositoriossa
+
+### Miten tätä vehjettä ajetaan?
+
+Tarvitset .env tiedoston joka sisältää kyseiset arvot:
+```
+DISCORD_TOKEN=
+DATABASE_URL=
+
+AWARD_CHANNEL_ID=
+MEMBER_ROLE_ID=
+GUILD_ID=
+
+CLIENT_ID=
+CLIENT_SECRET=
+
+PAT=
+ORG_NAME=
+```
