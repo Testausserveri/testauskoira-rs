@@ -6,6 +6,8 @@ use oauth2::{
     TokenUrl,
 };
 
+use crate::Database;
+
 use std::{collections::HashMap, env, sync::Arc};
 
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
@@ -15,12 +17,11 @@ use serenity::http::Http;
 struct AppState {
     oauth: BasicClient,
     http: Arc<Http>,
+    db: Arc<Database>,
 }
 
 fn index(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let (auth_url, _csrf_token) = &data.oauth.authorize_url(CsrfToken::new_random).url();
-
-    println!("{}", auth_url);
 
     HttpResponse::Found()
         .append_header((header::LOCATION, auth_url.to_string()))
@@ -52,8 +53,6 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
         .request(oauth2::curl::http_client)
         .expect("exchange_code failed");
 
-    println!("Token: {:#?}", token.access_token());
-
     let url = "https://api.github.com/user";
 
     let client = reqwest::Client::new();
@@ -62,10 +61,7 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
     let resp = client
         .get(url)
         .header(USER_AGENT, "testaukoira-rs")
-        .header(
-            AUTHORIZATION,
-            format!("token {}", access_token),
-        )
+        .header(AUTHORIZATION, format!("token {}", access_token))
         .send()
         .await
         .unwrap();
@@ -76,7 +72,7 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
     map.insert("invitee_id", user.id);
 
     let join_resp = client
-        .post("https://api.github.com/orgs/vilepis-testing-org/invitations")
+        .post(format!("https://api.github.com/orgs/{}/invitations", org))
         .header(USER_AGENT, "testaukoira-rs")
         .header(AUTHORIZATION, format!("token {}", pat))
         .json(&map)
@@ -84,37 +80,48 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
         .await
         .unwrap();
 
-    let mut map = HashMap::new();
-    map.insert("accept", "application/vnd.github.v3+json");
-    map.insert("state", "active");
+    match join_resp.error_for_status() {
+        Ok(_) => {
+            let mut map = HashMap::new();
+            map.insert("accept", "application/vnd.github.v3+json");
+            map.insert("state", "active");
 
-    client
-        .patch("https://api.github.com/user/memberships/orgs/Testausserveri")
-        .header(USER_AGENT, "testaukoira-rs")
-        .header(AUTHORIZATION, format!("token {}", access_token))
-        .send()
-        .await
-        .unwrap();
+            client
+                .patch(format!(
+                    "https://api.github.com/user/memberships/orgs/{}",
+                    org
+                ))
+                .header(USER_AGENT, "testaukoira-rs")
+                .header(AUTHORIZATION, format!("token {}", access_token))
+                .send()
+                .await
+                .unwrap();
 
-    client
-        .put(format!("https://api.github.com/orgs/Testausserveri/public_members/{}",user.login))
-        .header(USER_AGENT, "testaukoira-rs")
-        .header(AUTHORIZATION, format!("token {}", access_token ))
-        .send()
-        .await
-        .unwrap();
+            client
+                .put(format!(
+                    "https://api.github.com/orgs/{}/public_members/{}",
+                    org, user.login
+                ))
+                .header(USER_AGENT, "testaukoira-rs")
+                .header(AUTHORIZATION, format!("token {}", access_token))
+                .send()
+                .await
+                .unwrap();
 
-    serenity::model::id::ChannelId::from(880127231664459809)
-        .say(data.http.clone(),format!("{} liittyi Testausserverin GitHub-organisaatioon 🎉! Liity sinäkin: https://koira.testausserveri.fi/github/join",user.login))
-        .await
-        .ok();
+            serenity::model::id::ChannelId::from(880127231664459809)
+                .say(data.http.clone(),format!("{} liittyi Testausserverin GitHub-organisaatioon 🎉! Liity sinäkin: <https://koira.testausserveri.fi/github/join>",user.login))
+                .await
+                .ok();
+        }
+        Err(e) => error!("{}", e),
+    }
 
     HttpResponse::Found()
-        .append_header((header::LOCATION, "https://github.com/Testausserveri"))
+        .append_header((header::LOCATION, format!("https://github.com/{}", org)))
         .finish()
 }
 
-pub async fn start_api(http: Arc<serenity::http::client::Http>) -> Server {
+pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database>) -> Server {
     dotenv::dotenv().expect("Failed to load .env file");
 
     HttpServer::new(move || {
@@ -125,10 +132,9 @@ pub async fn start_api(http: Arc<serenity::http::client::Http>) -> Server {
             env::var("CLIENT_SECRET").expect("Missing the CLIENT_SECRET environment variable."),
         );
 
-        let oauthserver = env::var("SERVER").expect("Missing the SERVER environment variable.");
-        let auth_url = AuthUrl::new(format!("https://{}/login/oauth/authorize", oauthserver))
+        let auth_url = AuthUrl::new(String::from("https://github.com/login/oauth/authorize"))
             .expect("Invalid authorization endpoint URL");
-        let token_url = TokenUrl::new(format!("https://{}/login/oauth/access_token", oauthserver))
+        let token_url = TokenUrl::new(String::from("https://github.com/login/oauth/access_token"))
             .expect("Invalid token endpoint URL");
 
         let client = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url))

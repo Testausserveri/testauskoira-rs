@@ -62,7 +62,7 @@ impl EventHandler for Handler {
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
         info!("{} joined", member.user);
         let member_role = env::var("MEMBER_ROLE_ID")
-            .expect("memer role id not found in $MEMBER_ROLE_ID")
+            .expect("member role id not found in $MEMBER_ROLE_ID")
             .parse::<u64>()
             .expect("Invalid member role id");
         member.clone().add_role(&ctx.http, member_role).await.ok();
@@ -133,7 +133,11 @@ async fn main() {
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
 
-    let server = api::webserver::start_api(client.cache_and_http.http.clone()).await;
+    let server = api::webserver::start_api(
+        client.cache_and_http.http.clone(),
+        client.get_db().await.clone(),
+    )
+    .await;
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
@@ -144,7 +148,7 @@ async fn main() {
         server.stop(true).await;
     });
 
-    if let Err(why) = client.start().await {
-        error!("Client error: {}", why);
+    if let Err(e) = client.start().await {
+        error!("Client error: {}", e);
     }
 }
