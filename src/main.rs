@@ -1,28 +1,33 @@
-#![feature(async_closure)]
+pub mod api;
 pub mod commands;
 pub mod database;
 pub mod extensions;
 pub mod utils;
 
-use commands::{owner::*, links::*};
+#[macro_use]
+extern crate tracing;
+#[macro_use]
+extern crate serde_derive;
+
+use commands::{links::*, owner::*};
 use database::Database;
+use extensions::*;
 use utils::winner_showcase::*;
 
 use std::{collections::HashSet, env, sync::Arc};
 
 use serenity::{
     async_trait,
-    client::bridge::gateway::{ShardManager, GatewayIntents},
+    client::bridge::gateway::{GatewayIntents, ShardManager},
     framework::{standard::macros::group, StandardFramework},
     http::Http,
+    model::prelude::*,
     model::{event::ResumedEvent, gateway::Ready},
     prelude::*,
-    model::prelude::*,
 };
 
 use clokwerk::{Scheduler, TimeUnits};
 
-use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 
 pub struct ShardManagerContainer;
@@ -40,21 +45,27 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        let db = ctx.data.read().await.get::<Database>().unwrap().clone();
-        let words = std::fs::read_to_string("blacklist.txt").expect("Expected blacklist.txt in running directory");
-        if let Ok(_) = db.increment_message_count(&msg.author.id.as_u64()).await {};
+        let db = ctx.get_db().await;
+        db.increment_message_count(msg.author.id.as_u64())
+            .await
+            .ok();
+
+        let words = std::fs::read_to_string("blacklist.txt")
+            .expect("Expected blacklist.txt in running directory");
         for w in words.lines() {
             if msg.content.contains(w) {
-                if let Ok(_) = msg.delete(&ctx.http).await {};
+                msg.delete(&ctx.http).await.ok();
             }
         }
     }
 
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
-        let member_name = member.guild_id.name(&ctx.cache).await.unwrap();
-        info!("{} joined {}", member.user.name,member_name);
-        //if let Ok(_) = member.clone().add_role(&ctx.http,728178268590571580).await {};
-        member.clone().add_role(&ctx.http, 895943702151823380u64).await.unwrap();
+        info!("{} joined", member.user);
+        let member_role = env::var("MEMBER_ROLE_ID")
+            .expect("memer role id not found in $MEMBER_ROLE_ID")
+            .parse::<u64>()
+            .expect("Invalid member role id");
+        member.clone().add_role(&ctx.http, member_role).await.ok();
     }
 
     async fn resume(&self, _: Context, _: ResumedEvent) {
@@ -66,7 +77,7 @@ impl EventHandler for Handler {
 #[commands(quit, github, award_ceremony)]
 struct General;
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() {
     dotenv::dotenv().expect("Failed to load .env file");
 
@@ -76,8 +87,7 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to start the logger");
 
-    let database = Database::new()
-        .await;
+    let database = Database::new().await;
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     let http = Http::new_with_token(&token);
@@ -114,15 +124,16 @@ async fn main() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
-    let db = client.data.read().await.get::<Database>().unwrap().clone();
+    let db = client.get_db().await;
     let http = client.cache_and_http.http.clone();
 
     scheduler.every(1.day()).at("23:59").run(move || {
-        runtime.block_on(display_winner(http.to_owned(),db.to_owned()));
+        runtime.block_on(display_winner(http.to_owned(), db.to_owned()));
     });
 
-    
-    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(10000));
+    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
+
+    let server = api::webserver::start_api(client.cache_and_http.http.clone()).await;
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
@@ -130,6 +141,7 @@ async fn main() {
             .expect("Could not register ctrl+c handler");
         thread_handle.stop();
         shard_manager.lock().await.shutdown_all().await;
+        server.stop(true).await;
     });
 
     if let Err(why) = client.start().await {

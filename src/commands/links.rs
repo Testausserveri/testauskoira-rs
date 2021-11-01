@@ -4,6 +4,12 @@ use serenity::prelude::*;
 
 #[command]
 async fn github(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&ctx.http, "Linkki github organisaatioon:\n<https://koira.testausserveri.fi/github/join>").await.unwrap();
+    msg.channel_id
+        .say(
+            &ctx.http,
+            "Linkki github organisaatioon:\n<https://koira.testausserveri.fi/github/join>",
+        )
+        .await
+        .unwrap();
     Ok(())
 }

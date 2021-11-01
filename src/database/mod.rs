@@ -9,7 +9,7 @@ pub struct Database {
 }
 
 impl Database {
-    pub async fn new() -> Database {
+    pub async fn new() -> Self {
         let pool = MySqlPool::connect(&std::env::var("DATABASE_URL").unwrap())
             .await
             .unwrap();

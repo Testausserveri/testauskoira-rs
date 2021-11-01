@@ -1,6 +1,6 @@
-use crate::{database::Database};
-use std::sync::Arc;
+use crate::database::Database;
 use serenity::{async_trait, client};
+use std::sync::Arc;
 
 #[async_trait]
 pub trait ClientContextExt {
@@ -9,6 +9,13 @@ pub trait ClientContextExt {
 
 #[async_trait]
 impl ClientContextExt for client::Context {
+    async fn get_db(&self) -> Arc<Database> {
+        self.data.read().await.get::<Database>().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl ClientContextExt for client::Client {
     async fn get_db(&self) -> Arc<Database> {
         self.data.read().await.get::<Database>().unwrap().clone()
     }
