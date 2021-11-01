@@ -40,8 +40,25 @@ struct User {
     id: u64,
 }
 
+async fn guild_info(data: web::Data<Arc<AppState>>) -> HttpResponse {
+    let guild_id: u64 = std::env::var("GUILD_ID").unwrap().parse().unwrap();
+    let msg_count = data.db.get_total_messages().await.unwrap().unwrap();
+    let members = serenity::model::id::GuildId::from(guild_id)
+        .members(&data.http, None, None)
+        .await
+        .unwrap()
+        .len();
+
+    let mut map: HashMap<&str, u64> = HashMap::new();
+    map.insert("memberCount", members as u64);
+    map.insert("messagesToday", msg_count);
+
+    HttpResponse::Ok().json(map)
+}
+
 async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -> HttpResponse {
     let pat = std::env::var("PAT").unwrap();
+    let org = std::env::var("ORG_NAME").unwrap();
 
     let code = AuthorizationCode::new(params.code.clone());
     let _state = CsrfToken::new(params.state.clone());
@@ -146,12 +163,14 @@ pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database
         let data = web::Data::new(Arc::new(AppState {
             oauth: client,
             http: http.clone(),
+            db: db.clone(),
         }));
 
         App::new()
             .app_data(data)
-            .route("/", web::get().to(index))
+            .route("/github/join", web::get().to(index))
             .route("/api/authorized", web::get().to(auth))
+            .route("/api/guildInfo", web::get().to(guild_info))
     })
     .bind("localhost:8080")
     .expect("Can not bind to port 8080")
