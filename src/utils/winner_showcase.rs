@@ -6,7 +6,7 @@ use tracing::error;
 
 pub async fn display_winner(http: Arc<Http>, db: Arc<Database>) {
     let winners = db.get_most_active(5).await.unwrap();
-    let total_msgs = db.get_total_messages().await.unwrap().unwrap();
+    let total_msgs = db.get_total_daily_messages().await.unwrap();
 
     let channel = ChannelId::from(
         env::var("AWARD_CHANNEL_ID")

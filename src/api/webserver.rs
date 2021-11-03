@@ -42,7 +42,7 @@ struct User {
 
 async fn guild_info(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let guild_id: u64 = std::env::var("GUILD_ID").unwrap().parse().unwrap();
-    let msg_count = data.db.get_total_messages().await.unwrap().unwrap();
+    let msg_count = data.db.get_total_daily_messages().await.unwrap();
     let members = serenity::model::id::GuildId::from(guild_id)
         .members(&data.http, None, None)
         .await
