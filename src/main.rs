@@ -1,4 +1,4 @@
-pub mod api;
+pub mod webserver;
 pub mod commands;
 pub mod database;
 pub mod extensions;
@@ -133,7 +133,7 @@ async fn main() {
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
 
-    let server = api::webserver::start_api(
+    let server = webserver::start_api(
         client.cache_and_http.http.clone(),
         client.get_db().await.clone(),
     )
