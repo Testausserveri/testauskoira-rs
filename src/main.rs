@@ -3,6 +3,7 @@ pub mod commands;
 pub mod database;
 pub mod extensions;
 pub mod utils;
+pub mod voting;
 
 #[macro_use]
 extern crate tracing;
@@ -22,7 +23,7 @@ use serenity::{
     framework::{standard::macros::group, StandardFramework},
     http::Http,
     model::prelude::*,
-    model::{event::ResumedEvent, gateway::Ready},
+    model::{event::ResumedEvent, event::MessageUpdateEvent, gateway::Ready},
     prelude::*,
 };
 
@@ -44,6 +45,10 @@ impl EventHandler for Handler {
         info!("Connected as {}", ready.user.name);
     }
 
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        voting::handle_vote_interaction(ctx, interaction).await;
+    }
+
     async fn message(&self, ctx: Context, msg: Message) {
         let db = ctx.get_db().await;
         db.increment_message_count(msg.author.id.as_u64())
@@ -57,6 +62,20 @@ impl EventHandler for Handler {
                 msg.delete(&ctx.http).await.ok();
             }
         }
+    }
+
+    async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
+        if reaction.user_id.unwrap().0 != ctx.http.get_current_application_info().await.unwrap().id.0 {
+            if let ReactionType::Custom {id, ..} = reaction.emoji {
+                if id.0 == 910974412830941244 {
+                    voting::handle_report(&ctx, reaction).await
+                }
+            }
+        }
+    }
+
+    async fn message_update(&self, ctx: Context, _: Option<Message>, _: Option<Message>, event: MessageUpdateEvent) {
+        voting::handle_edit(&ctx, &event).await;
     }
 
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
@@ -90,6 +109,9 @@ async fn main() {
     let database = Database::new().await;
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let application_id = env::var("APPLICATION_ID").expect("Expected an application id")
+        .parse::<u64>()
+        .expect("Invalid application id form");
     let http = Http::new_with_token(&token);
 
     let (owners, _bot_id) = match http.get_current_application_info().await {
@@ -107,9 +129,10 @@ async fn main() {
         .group(&GENERAL_GROUP);
 
     let mut client = Client::builder(&token)
+        .application_id(application_id)
         .framework(framework)
         .event_handler(Handler)
-        .intents(GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS)
+        .intents(GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS | GatewayIntents::GUILD_PRESENCES)
         .await
         .expect("Err creating client");
 

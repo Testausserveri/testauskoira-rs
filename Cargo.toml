@@ -14,7 +14,7 @@ opt-level = 3
 [dependencies.serenity]
 version = "0.10"
 default-features = false
-features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework"]
+features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework", "unstable_discord_api"]
 
 [dependencies.tokio]
 version = "1.13"
@@ -43,6 +43,6 @@ futures = "0.3"
 num-traits = "0.2"
 rand = "0.8"
 photon-rs = "0.3"
-rustls = "0.20" 
+rustls = "0.20"
 clokwerk = "0.3.5"
 chrono = "0.4"

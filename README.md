@@ -34,7 +34,9 @@ Tarvitset .env tiedoston joka sisältää kyseiset arvot:
 DISCORD_TOKEN=
 DATABASE_URL=
 
+APPLICATION_ID=
 AWARD_CHANNEL_ID=
+MOD_CHANNEL_ID=
 MEMBER_ROLE_ID=
 GUILD_ID=
 
@@ -44,3 +46,8 @@ CLIENT_SECRET=
 PAT=
 ORG_NAME=
 ```
+
+Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta}(https://discord.com/developers) seuraavat INTENTit:
+* Presence Intent
+* Server Members Intent
+
