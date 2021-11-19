@@ -67,7 +67,7 @@ impl EventHandler for Handler {
     async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
         if reaction.user_id.unwrap().0 != ctx.http.get_current_application_info().await.unwrap().id.0 {
             if let ReactionType::Custom {id, ..} = reaction.emoji {
-                if id.0 == 910974412830941244 {
+                if id.0 == env::var("REPORTE_EMOTE_ID").expect("Expected report emote id").parse::<u64>().expect("Invalid report emote id") {
                     voting::handle_report(&ctx, reaction).await
                 }
             }
