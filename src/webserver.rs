@@ -1,10 +1,12 @@
 use actix_web::http::header;
-use actix_web::{dev::Server, web, App, HttpResponse, HttpServer};
+use actix_web::{dev::{Server,ServerHandle}, web, App, HttpResponse, HttpServer};
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, TokenResponse,
     TokenUrl,
 };
+
+use twilight_model::id::GuildId;
 
 use crate::Database;
 
@@ -12,11 +14,11 @@ use std::{collections::HashMap, env, sync::Arc};
 
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
 
-use serenity::http::Http;
+use twilight_http::Client;
 
 struct AppState {
     oauth: BasicClient,
-    http: Arc<Http>,
+    http: Arc<Client>,
     db: Arc<Database>,
 }
 
@@ -43,11 +45,8 @@ struct User {
 async fn guild_info(data: web::Data<Arc<AppState>>) -> HttpResponse {
     let guild_id: u64 = std::env::var("GUILD_ID").unwrap().parse().unwrap();
     let msg_count = data.db.get_total_daily_messages().await.unwrap();
-    let members = serenity::model::id::GuildId::from(guild_id)
-        .members(&data.http, None, None)
-        .await
-        .unwrap()
-        .len();
+    let guild = data.http.guild(GuildId::new(guild_id).expect("Invalid guild id")).exec().await.unwrap().model().await.unwrap();
+    let members = guild.member_count.unwrap();
 
     let mut map: HashMap<&str, u64> = HashMap::new();
     map.insert("memberCount", members as u64);
@@ -125,10 +124,13 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
                 .await
                 .unwrap();
 
-            serenity::model::id::ChannelId::from(880127231664459809)
-                .say(data.http.clone(),format!("{} liittyi Testausserverin GitHub-organisaatioon 🎉! Liity sinäkin: <https://koira.testausserveri.fi/github/join>",user.login))
+            let channel = twilight_model::id::ChannelId::new(880127231664459809).unwrap();
+            data.http.create_message(channel)
+                .content(format!("{} liittyi Testausserverin GitHub-organisaatioon 🎉! Liity sinäkin: <https://koira.testausserveri.fi/github/join>",user.login).as_str())
+                .unwrap()
+                .exec()
                 .await
-                .ok();
+                .unwrap();
         }
         Err(e) => error!("{}", e),
     }
@@ -138,7 +140,7 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
         .finish()
 }
 
-pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database>) -> Server {
+pub async fn start_api(http: Arc<Client>, db: Arc<Database>) -> ServerHandle {
     dotenv::dotenv().expect("Failed to load .env file");
 
     HttpServer::new(move || {
@@ -175,4 +177,5 @@ pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database
     .bind("localhost:8080")
     .expect("Can not bind to port 8080")
     .run()
+    .handle()
 }

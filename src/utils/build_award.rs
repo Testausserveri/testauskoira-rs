@@ -2,8 +2,8 @@ extern crate photon_rs;
 
 use photon_rs::native::*;
 
-pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
-    let profile_picture = reqwest::get(format!("{}?size=128", user_img_url))
+pub async fn build_award_image(uid: u64,user_img_url: &str) -> Result<String, ()> {
+    let profile_picture = reqwest::get(format!("https://cdn.discordapp.com/avatars/{}/{}?size=128",uid, user_img_url))
         .await
         .unwrap()
         .bytes()

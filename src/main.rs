@@ -1,154 +1,120 @@
 pub mod webserver;
-pub mod commands;
 pub mod database;
-pub mod extensions;
+pub mod commands;
 pub mod utils;
+
+use serde::ser::StdError;
 
 #[macro_use]
 extern crate tracing;
 #[macro_use]
 extern crate serde_derive;
 
-use commands::{links::*, owner::*};
 use database::Database;
-use extensions::*;
-use utils::winner_showcase::*;
 
-use std::{collections::HashSet, env, sync::Arc};
+use commands::{links,owner};
 
-use serenity::{
-    async_trait,
-    client::bridge::gateway::{GatewayIntents, ShardManager},
-    framework::{standard::macros::group, StandardFramework},
-    http::Http,
-    model::prelude::*,
-    model::{event::ResumedEvent, gateway::Ready},
-    prelude::*,
-};
+use std::{env, sync::Arc, error::Error};
 
 use clokwerk::{Scheduler, TimeUnits};
 
-use tracing_subscriber::FmtSubscriber;
+use futures::stream::StreamExt;
+use twilight_cache_inmemory::{InMemoryCache, ResourceType};
+use twilight_gateway::{cluster::{Cluster, ShardScheme}, Event};
+use twilight_http::Client as HttpClient;
+use twilight_model::gateway::Intents;
 
-pub struct ShardManagerContainer;
+use tokio::runtime::Runtime;
 
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        info!("Connected as {}", ready.user.name);
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-        let db = ctx.get_db().await;
-        db.increment_message_count(msg.author.id.as_u64())
-            .await
-            .ok();
-
-        let words = std::fs::read_to_string("blacklist.txt")
-            .expect("Expected blacklist.txt in running directory");
-        for w in words.lines() {
-            if msg.content.contains(w) {
-                msg.delete(&ctx.http).await.ok();
-            }
-        }
-    }
-
-    async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
-        info!("{} joined", member.user);
-        let member_role = env::var("MEMBER_ROLE_ID")
-            .expect("member role id not found in $MEMBER_ROLE_ID")
-            .parse::<u64>()
-            .expect("Invalid member role id");
-        member.clone().add_role(&ctx.http, member_role).await.ok();
-    }
-
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        info!("Resumed");
-    }
-}
-
-#[group]
-#[commands(quit, github, award_ceremony)]
-struct General;
+use crate::utils::winner_showcase::display_winner;
 
 #[actix_rt::main]
-async fn main() {
+async fn main() -> Result<(), Box<(dyn StdError + Sync + std::marker::Send + 'static)>> {
     dotenv::dotenv().expect("Failed to load .env file");
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .finish();
+    tracing_subscriber::fmt::init();
 
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to start the logger");
-
-    let database = Database::new().await;
+    let db = Arc::new(Database::new().await);
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let http = Http::new_with_token(&token);
 
-    let (owners, _bot_id) = match http.get_current_application_info().await {
-        Ok(info) => {
-            let mut owners = HashSet::new();
-            owners.insert(info.owner.id);
+    let scheme = ShardScheme::Auto;
+    let http = Arc::new(HttpClient::new(token.clone()));
 
-            (owners, info.id)
-        }
-        Err(why) => panic!("Could not access application info: {:?}", why),
-    };
+    let (cluster, mut events) = Cluster::builder(token.to_owned(), Intents::GUILD_MESSAGES)
+        .shard_scheme(scheme)
+        .build()
+        .await?;
+    let cluster = Arc::new(cluster);
 
-    let framework = StandardFramework::new()
-        .configure(|c| c.owners(owners).prefix("!"))
-        .group(&GENERAL_GROUP);
+    let cluster_spawn = Arc::clone(&cluster);
 
-    let mut client = Client::builder(&token)
-        .framework(framework)
-        .event_handler(Handler)
-        .intents(GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS)
-        .await
-        .expect("Err creating client");
+    tokio::spawn(async move {
+        cluster_spawn.up().await;
+    });
 
-    {
-        let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<Database>(Arc::new(database));
-    }
 
-    let shard_manager = client.shard_manager.clone();
+    let server = webserver::start_api(
+        http.clone(),
+        db.clone(),
+        )
+        .await;
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
-    let db = client.get_db().await;
-    let http = client.cache_and_http.http.clone();
+    let db_clone = db.to_owned();
+    let http_clone = http.to_owned();
 
+    let runtime = Arc::new(Runtime::new().unwrap());
     scheduler.every(1.day()).at("23:59").run(move || {
-        runtime.block_on(display_winner(http.to_owned(), db.to_owned()));
+        runtime.block_on(display_winner(http_clone.clone(),db_clone.clone()));
     });
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
-
-    let server = webserver::start_api(
-        client.cache_and_http.http.clone(),
-        client.get_db().await.clone(),
-    )
-    .await;
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
         thread_handle.stop();
-        shard_manager.lock().await.shutdown_all().await;
         server.stop(true).await;
     });
 
-    if let Err(e) = client.start().await {
-        error!("Client error: {}", e);
+    let cache = InMemoryCache::builder()
+        .resource_types(ResourceType::MESSAGE)
+        .build();
+
+    // FIXME: This creates an infinite loop.
+    while let Some((shard_id, event)) = events.next().await {
+        cache.update(&event);
+
+        tokio::spawn(handle_event(shard_id, event, Arc::clone(&http),db.clone()));
     }
+    Ok(())
+}
+
+async fn handle_event(
+    shard_id: u64,
+    event: Event,
+    http: Arc<HttpClient>,
+    db: Arc<Database>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    match event {
+        Event::MessageCreate(msg) => {
+            db.increment_message_count(msg.0.author.id.get()).await.unwrap();
+            match msg.content.as_str() {
+                "!github" => links::github(msg,http).await,
+                "!award_ceremony" => owner::award_ceremony(msg,http,db).await,
+                _ => {},
+            }
+        }
+        Event::Ready(ready) => {
+        }
+        Event::ShardConnected(_) => {
+            println!("Connected on shard {}", shard_id);
+        }
+        _ => {}
+    }
+
+    Ok(())
 }

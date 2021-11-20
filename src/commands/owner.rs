@@ -1,31 +1,8 @@
-use crate::extensions::*;
-use serenity::framework::standard::{macros::command, CommandResult};
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use twilight_model::gateway::payload::incoming::MessageCreate;
+use twilight_http::Client;
+use std::sync::Arc;
+use crate::{database::Database,utils::winner_showcase::*};
 
-use crate::utils::winner_showcase::display_winner;
-use crate::ShardManagerContainer;
-
-#[command]
-#[owners_only]
-async fn quit(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = ctx.data.read().await;
-
-    if let Some(manager) = data.get::<ShardManagerContainer>() {
-        msg.reply(ctx, "Shutting down").await?;
-        manager.lock().await.shutdown_all().await;
-    } else {
-        msg.reply(ctx, "There was a problem getting the shard manager")
-            .await?;
-    }
-
-    Ok(())
-}
-
-#[command]
-#[owners_only]
-async fn award_ceremony(ctx: &Context, _msg: &Message) -> CommandResult {
-    let db = ctx.get_db().await;
-    display_winner(ctx.http.to_owned(), db.to_owned()).await;
-    Ok(())
+pub async fn award_ceremony(msg: Box<MessageCreate>, http: Arc<Client>, db: Arc<Database>) {
+    display_winner(http, db).await;
 }

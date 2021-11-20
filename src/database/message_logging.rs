@@ -11,7 +11,7 @@ struct Member {
 impl Database {
     pub async fn increment_message_count(
         &self,
-        userid: &u64,
+        userid: u64,
     ) -> Result<MySqlQueryResult, sqlx::Error> {
         let mut conn = self.pool.acquire().await.unwrap();
         sqlx::query!("INSERT INTO `messages_day_stat` SET `message_count` = 1, `userid` = ?, `date` = CURDATE() ON DUPLICATE KEY UPDATE `message_count` = `message_count` + 1",

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use serenity::prelude::TypeMapKey;
 use sqlx::MySqlPool;
 pub mod message_logging;
 
@@ -15,8 +14,4 @@ impl Database {
             .unwrap();
         Self { pool }
     }
-}
-
-impl TypeMapKey for Database {
-    type Value = Arc<Database>;
 }
