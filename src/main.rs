@@ -1,9 +1,9 @@
-pub mod webserver;
 pub mod commands;
 pub mod database;
 pub mod extensions;
 pub mod utils;
 pub mod voting;
+pub mod webserver;
 
 #[macro_use]
 extern crate tracing;
@@ -23,7 +23,7 @@ use serenity::{
     framework::{standard::macros::group, StandardFramework},
     http::Http,
     model::prelude::*,
-    model::{event::ResumedEvent, event::MessageUpdateEvent, gateway::Ready},
+    model::{event::MessageUpdateEvent, event::ResumedEvent, gateway::Ready},
     prelude::*,
 };
 
@@ -41,15 +41,40 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         info!("Connected as {}", ready.user.name);
+        application_command::ApplicationCommand::set_global_application_commands(
+            &ctx.http,
+            |commands| {
+                commands.create_application_command(|command| {
+                    command
+                        .name("⛔ Report message")
+                        .kind(application_command::ApplicationCommandType::Message)
+                })
+            },
+        )
+        .await
+        .unwrap();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        voting::handle_vote_interaction(ctx, interaction).await;
+        match interaction {
+            Interaction::ApplicationCommand(ref a) => {
+                voting::handle_report(&ctx, a.to_owned()).await;
+            }
+            Interaction::MessageComponent(_) => {
+                voting::handle_vote_interaction(ctx, interaction).await;
+            }
+            _ => {}
+        };
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
+        if msg.content == "Reported"
+            && msg.author.id == ctx.http.get_current_application_info().await.unwrap().id.0
+        {
+            msg.delete(&ctx.http).await.unwrap();
+        }
         let db = ctx.get_db().await;
         db.increment_message_count(msg.author.id.as_u64())
             .await
@@ -64,18 +89,24 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn reaction_add(&self, ctx: Context, reaction: Reaction) {
-        if reaction.user_id.unwrap().0 != ctx.http.get_current_application_info().await.unwrap().id.0 {
-            if let ReactionType::Custom {id, ..} = reaction.emoji {
-                if id.0 == env::var("REPORTE_EMOTE_ID").expect("Expected report emote id").parse::<u64>().expect("Invalid report emote id") {
-                    voting::handle_report(&ctx, reaction).await
-                }
-            }
-        }
+    async fn message_update(
+        &self,
+        ctx: Context,
+        _: Option<Message>,
+        _: Option<Message>,
+        event: MessageUpdateEvent,
+    ) {
+        voting::handle_edit(&ctx, &event).await;
     }
 
-    async fn message_update(&self, ctx: Context, _: Option<Message>, _: Option<Message>, event: MessageUpdateEvent) {
-        voting::handle_edit(&ctx, &event).await;
+    async fn message_delete(
+        &self,
+        ctx: Context,
+        _: ChannelId,
+        message_id: MessageId,
+        _: Option<GuildId>,
+    ) {
+        voting::handle_delete(&ctx, message_id).await;
     }
 
     async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
@@ -109,7 +140,8 @@ async fn main() {
     let database = Database::new().await;
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let application_id = env::var("APPLICATION_ID").expect("Expected an application id")
+    let application_id = env::var("APPLICATION_ID")
+        .expect("Expected an application id")
         .parse::<u64>()
         .expect("Invalid application id form");
     let http = Http::new_with_token(&token);
@@ -132,7 +164,11 @@ async fn main() {
         .application_id(application_id)
         .framework(framework)
         .event_handler(Handler)
-        .intents(GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS | GatewayIntents::GUILD_PRESENCES)
+        .intents(
+            GatewayIntents::non_privileged()
+                | GatewayIntents::GUILD_MEMBERS
+                | GatewayIntents::GUILD_PRESENCES,
+        )
         .await
         .expect("Err creating client");
 

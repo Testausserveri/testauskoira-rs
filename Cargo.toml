@@ -12,7 +12,7 @@ opt-level = 1
 opt-level = 3
 
 [dependencies.serenity]
-version = "0.10"
+git = "https://github.com/serenity-rs/serenity"
 default-features = false
 features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework", "unstable_discord_api"]
 
@@ -27,7 +27,7 @@ features = ["mysql","runtime-tokio-rustls","bigdecimal"]
 [dependencies]
 tracing = "0.1"
 tracing-futures = "0.2"
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 
 actix-web = "4.0.0-beta"
 actix-rt = "2.3"

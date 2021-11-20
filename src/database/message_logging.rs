@@ -35,16 +35,20 @@ impl Database {
     }
     pub async fn get_most_active(&self, winner_count: u64) -> Result<Vec<(u64, i32)>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
-        let blacklist = std::fs::read_to_string("award_id_blacklist.txt").expect("Failed to read award blacklist");
-        let blacklist = blacklist.lines().map(|s| format!("'{}'",s)).collect::<Vec<_>>().join(",");
+        let blacklist = std::fs::read_to_string("award_id_blacklist.txt")
+            .expect("Failed to read award blacklist");
+        let blacklist = blacklist
+            .lines()
+            .map(|s| format!("'{}'", s))
+            .collect::<Vec<_>>()
+            .join(",");
 
         let members: Vec<Member> = sqlx::query_as(&format!("SELECT `userid`,`message_count` FROM `messages_day_stat` WHERE `date` = SUBDATE(CURRENT_DATE, 0) AND `userid` NOT IN ( {} ) ORDER BY `message_count` DESC LIMIT {}",&blacklist, winner_count))
             .fetch_all(&mut conn)
             .await?;
-        let members =
-            members
+        let members = members
             .iter()
-            .map(|m| (m.userid.parse::<u64>().unwrap(),m.message_count))
+            .map(|m| (m.userid.parse::<u64>().unwrap(), m.message_count))
             .collect();
         Ok(members)
     }

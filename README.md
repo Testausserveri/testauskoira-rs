@@ -39,7 +39,6 @@ AWARD_CHANNEL_ID=
 MOD_CHANNEL_ID=
 MEMBER_ROLE_ID=
 GUILD_ID=
-REPORT_EMOTE_ID=
 
 CLIENT_ID=
 CLIENT_SECRET=
@@ -48,7 +47,7 @@ PAT=
 ORG_NAME=
 ```
 
-Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta}(https://discord.com/developers) seuraavat INTENTit:
+Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:
 * Presence Intent
 * Server Members Intent
 

@@ -1,5 +1,5 @@
 use actix_web::http::header;
-use actix_web::{dev::Server, web, App, HttpResponse, HttpServer};
+use actix_web::{dev::ServerHandle, web, App, HttpResponse, HttpServer};
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, TokenResponse,
@@ -138,7 +138,7 @@ async fn auth(data: web::Data<Arc<AppState>>, params: web::Query<AuthRequest>) -
         .finish()
 }
 
-pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database>) -> Server {
+pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database>) -> ServerHandle {
     dotenv::dotenv().expect("Failed to load .env file");
 
     HttpServer::new(move || {
@@ -175,4 +175,5 @@ pub async fn start_api(http: Arc<serenity::http::client::Http>, db: Arc<Database
     .bind("localhost:8080")
     .expect("Can not bind to port 8080")
     .run()
+    .handle()
 }
