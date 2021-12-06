@@ -1,8 +1,9 @@
-use crate::extensions::*;
-use serenity::framework::standard::{macros::command, CommandResult};
+use serenity::framework::standard::macros::command;
+use serenity::framework::standard::CommandResult;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
+use crate::extensions::*;
 use crate::utils::winner_showcase::display_winner;
 use crate::ShardManagerContainer;
 

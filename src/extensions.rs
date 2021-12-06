@@ -1,6 +1,8 @@
-use crate::database::Database;
-use serenity::{async_trait, client};
 use std::sync::Arc;
+
+use serenity::{async_trait, client};
+
+use crate::database::Database;
 
 #[async_trait]
 pub trait ClientContextExt {

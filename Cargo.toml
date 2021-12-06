@@ -27,15 +27,13 @@ features = ["mysql","runtime-tokio-rustls","bigdecimal"]
 [dependencies]
 tracing = "0.1"
 tracing-futures = "0.2"
-tracing-subscriber = "0.3"
-
-actix-web = "4.0.0-beta"
-actix-rt = "2.3"
-oauth2 = {version = "4.1", features = ["curl"]}
-reqwest = {version = "0.11", features = ["rustls-tls","json"]}
+tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 
 serde = "1.0"
 serde_derive = "1.0"
+
+reqwest = "0.11"
+rustls = "0.20"
 
 regex = {version = "1.5", features = ["default"]}
 dotenv = "0.15"
@@ -43,6 +41,5 @@ futures = "0.3"
 num-traits = "0.2"
 rand = "0.8"
 photon-rs = "0.3"
-rustls = "0.20"
 clokwerk = "0.3.5"
 chrono = "0.4"

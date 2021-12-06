@@ -1,6 +1,7 @@
-use super::Database;
 use num_traits::cast::ToPrimitive;
 use sqlx::mysql::MySqlQueryResult;
+
+use super::Database;
 
 #[derive(sqlx::FromRow)]
 struct Member {

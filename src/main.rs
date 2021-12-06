@@ -3,33 +3,33 @@ pub mod database;
 pub mod extensions;
 pub mod utils;
 pub mod voting;
-pub mod webserver;
 
 #[macro_use]
 extern crate tracing;
 #[macro_use]
 extern crate serde_derive;
 
-use commands::{links::*, owner::*};
-use database::Database;
-use extensions::*;
-use utils::winner_showcase::*;
-
-use std::{collections::HashSet, env, sync::Arc};
-
-use serenity::{
-    async_trait,
-    client::bridge::gateway::{GatewayIntents, ShardManager},
-    framework::{standard::macros::group, StandardFramework},
-    http::Http,
-    model::prelude::*,
-    model::{event::MessageUpdateEvent, event::ResumedEvent, gateway::Ready},
-    prelude::*,
-};
+use std::collections::HashSet;
+use std::env;
+use std::sync::Arc;
 
 use clokwerk::{Scheduler, TimeUnits};
-
+use commands::links::*;
+use commands::owner::*;
+use database::Database;
+use extensions::*;
+use serenity::async_trait;
+use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
+use serenity::framework::standard::macros::group;
+use serenity::framework::StandardFramework;
+use serenity::http::Http;
+use serenity::model::event::{MessageUpdateEvent, ResumedEvent};
+use serenity::model::gateway::Ready;
+use serenity::model::prelude::*;
+use serenity::prelude::*;
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::FmtSubscriber;
+use utils::winner_showcase::*;
 
 pub struct ShardManagerContainer;
 
@@ -127,15 +127,13 @@ impl EventHandler for Handler {
 #[commands(quit, github, award_ceremony)]
 struct General;
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     dotenv::dotenv().expect("Failed to load .env file");
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(tracing::Level::INFO)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to start the logger");
+    FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::new("info,sqlx::query=error"))
+        .init();
 
     let database = Database::new().await;
 
@@ -192,19 +190,12 @@ async fn main() {
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
 
-    let server = webserver::start_api(
-        client.cache_and_http.http.clone(),
-        client.get_db().await.clone(),
-    )
-    .await;
-
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
         thread_handle.stop();
         shard_manager.lock().await.shutdown_all().await;
-        server.stop(true).await;
     });
 
     if let Err(e) = client.start().await {

@@ -1,18 +1,19 @@
+use std::collections::HashMap;
+use std::env;
+use std::sync::Arc;
+
+use actix_web::dev::ServerHandle;
 use actix_web::http::header;
-use actix_web::{dev::ServerHandle, web, App, HttpResponse, HttpServer};
+use actix_web::{web, App, HttpResponse, HttpServer};
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, TokenResponse,
     TokenUrl,
 };
+use reqwest::header::{AUTHORIZATION, USER_AGENT};
+use serenity::http::Http;
 
 use crate::Database;
-
-use std::{collections::HashMap, env, sync::Arc};
-
-use reqwest::header::{AUTHORIZATION, USER_AGENT};
-
-use serenity::http::Http;
 
 struct AppState {
     oauth: BasicClient,

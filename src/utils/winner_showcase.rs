@@ -1,8 +1,11 @@
-use crate::database::Database;
-use serenity::{http::client::Http, model::id::ChannelId};
 use std::env;
 use std::sync::Arc;
+
+use serenity::http::client::Http;
+use serenity::model::id::ChannelId;
 use tracing::error;
+
+use crate::database::Database;
 
 pub async fn display_winner(http: Arc<Http>, db: Arc<Database>) {
     let winners = db.get_most_active(5).await.unwrap();

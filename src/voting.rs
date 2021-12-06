@@ -1,11 +1,11 @@
-use crate::{
-    env, Channel, ChannelId, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
-};
 use serenity::builder::CreateEmbed;
 use serenity::model::channel::EmbedField;
 use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::interactions::message_component::ActionRowComponent;
-use serenity::model::interactions::message_component::ButtonStyle;
+use serenity::model::interactions::message_component::{ActionRowComponent, ButtonStyle};
+
+use crate::{
+    env, Channel, ChannelId, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
+};
 
 // Check whether the provided message is reported or not (if there is a report of the message on
 // the moderation channel)
