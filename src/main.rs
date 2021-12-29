@@ -70,11 +70,6 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "Reported"
-            && msg.author.id == ctx.http.get_current_application_info().await.unwrap().id.0
-        {
-            msg.delete(&ctx.http).await.unwrap();
-        }
         let db = ctx.get_db().await;
         db.increment_message_count(msg.author.id.as_u64())
             .await

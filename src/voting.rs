@@ -117,7 +117,12 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
 pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInteraction) {
     interaction
         .create_interaction_response(&ctx.http, |r| {
-            r.interaction_response_data(|d| d.content("Reported"));
+            r.interaction_response_data(|d| {
+                d.flags(
+                    serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
+                    );
+                d.content("The message has been reported to the council of arvojäsenet")
+            });
             r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
         })
         .await
