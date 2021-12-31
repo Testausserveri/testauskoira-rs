@@ -43,7 +43,12 @@ struct Handler;
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         info!("Connected as {}", ready.user.name);
-        application_command::ApplicationCommand::set_global_application_commands(
+        let guild_id: u64 = env::var("GUILD_ID")
+            .expect("No GUILD_ID in .env")
+            .parse()
+            .expect("Invalid GUILD_ID provided");
+        let guild_id = serenity::model::id::GuildId::from(guild_id);
+        guild_id.set_application_commands(
             &ctx.http,
             |commands| {
                 commands.create_application_command(|command| {
