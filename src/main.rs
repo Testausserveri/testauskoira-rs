@@ -48,7 +48,7 @@ impl EventHandler for Handler {
             |commands| {
                 commands.create_application_command(|command| {
                     command
-                        .name("⛔ Report message")
+                        .name("⛔ Ilmianna viesti")
                         .kind(application_command::ApplicationCommandType::Message)
                 })
             },

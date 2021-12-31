@@ -95,13 +95,13 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
             m.components(|c| {
                 c.create_action_row(|r| {
                     r.create_button(|b| {
-                        b.label("Delete message");
+                        b.label("Poista viesti");
                         b.style(ButtonStyle::Secondary);
                         b.disabled(true);
                         b.custom_id("delete_button")
                     });
                     r.create_button(|b| {
-                        b.label("Ban member");
+                        b.label("Erota jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
                     })
@@ -112,7 +112,7 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
         .unwrap();
 }
 
-// Handles an event where a message was reported using the "⛔ Report message" message command
+// Handles an event where a message was reported using the "⛔ Ilmianna viesti" message command
 // This sends an embed to the moderation channel, containing some information about the message
 // and the reported
 pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInteraction) {
@@ -122,7 +122,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                 d.flags(
                     serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
                     );
-                d.content("The message has been reported to the council of arvojäsenet")
+                d.content("Viesti on ilmiannettu arvojäsenten neuvostolle")
             });
             r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
         })
@@ -198,12 +198,12 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
             m.components(|c| {
                 c.create_action_row(|r| {
                     r.create_button(|b| {
-                        b.label("Delete message");
+                        b.label("Poista viesti");
                         b.style(ButtonStyle::Secondary);
                         b.custom_id("delete_button")
                     });
                     r.create_button(|b| {
-                        b.label("Ban member");
+                        b.label("Erota jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
                     })
@@ -340,13 +340,13 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
                 m.components(|c| {
                     c.create_action_row(|r| {
                         r.create_button(|b| {
-                            b.label("Delete message");
+                            b.label("Poista viesti");
                             b.style(ButtonStyle::Secondary);
                             b.disabled(true);
                             b.custom_id("delete_button")
                         });
                         r.create_button(|b| {
-                            b.label("Ban member");
+                            b.label("Erota jäsen");
                             b.style(ButtonStyle::Danger);
                             b.custom_id("ban_button")
                         })
@@ -471,13 +471,13 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
                 m.components(|c| {
                     c.create_action_row(|r| {
                         r.create_button(|b| {
-                            b.label("Delete message");
+                            b.label("Poista viesti");
                             b.style(ButtonStyle::Secondary);
                             b.disabled(true);
                             b.custom_id("delete_button")
                         });
                         r.create_button(|b| {
-                            b.label("Ban member");
+                            b.label("Erota jäsen");
                             b.style(ButtonStyle::Danger);
                             b.disabled(true);
                             b.custom_id("ban_button")
@@ -508,7 +508,7 @@ pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
         }
         component
             .create_interaction_response(&ctx.http, |r| {
-                r.interaction_response_data(|d| d.content("Reported"));
+                r.interaction_response_data(|d| d.content("Ilmiannettu"));
                 r.kind(
                     serenity::model::interactions::InteractionResponseType::DeferredUpdateMessage,
                 )
