@@ -1,16 +1,15 @@
-use serenity::framework::standard::macros::command;
-use serenity::framework::standard::CommandResult;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
+use serenity::prelude::Context;
 
-#[command]
-async fn github(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id
-        .say(
-            &ctx.http,
-            "Linkki github organisaatioon:\n<https://koira.testausserveri.fi/github/join>",
-        )
+pub async fn github(ctx: &Context, interaction: ApplicationCommandInteraction) {
+    interaction
+        .create_interaction_response(&ctx.http, |r| {
+            r.interaction_response_data(|d| {
+                d.content(
+                    "Linkki github organisaatioon:\n<https://koira.testausserveri.fi/github/join>",
+                )
+            })
+        })
         .await
         .unwrap();
-    Ok(())
 }

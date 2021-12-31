@@ -14,7 +14,6 @@ use std::env;
 use std::sync::Arc;
 
 use clokwerk::{Scheduler, TimeUnits};
-use commands::links::*;
 use commands::owner::*;
 use database::Database;
 use extensions::*;
@@ -48,25 +47,30 @@ impl EventHandler for Handler {
             .parse()
             .expect("Invalid GUILD_ID provided");
         let guild_id = serenity::model::id::GuildId::from(guild_id);
-        guild_id.set_application_commands(
-            &ctx.http,
-            |commands| {
+        guild_id
+            .set_application_commands(&ctx.http, |commands| {
+                commands.create_application_command(|command| {
+                    command
+                        .name("github")
+                        .description("Vastaanota kutsu Testausserverin GitHub-organisaatioon")
+                });
                 commands.create_application_command(|command| {
                     command
                         .name("⛔ Ilmianna viesti")
                         .kind(application_command::ApplicationCommandType::Message)
                 })
-            },
-        )
-        .await
-        .unwrap();
+            })
+            .await
+            .unwrap();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
-            Interaction::ApplicationCommand(ref a) => {
-                voting::handle_report(&ctx, a.to_owned()).await;
-            }
+            Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
+                "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
+                "github" => commands::links::github(&ctx, a.to_owned()).await,
+                _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
+            },
             Interaction::MessageComponent(_) => {
                 voting::handle_vote_interaction(ctx, interaction).await;
             }
@@ -124,7 +128,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(quit, github, award_ceremony)]
+#[commands(quit, award_ceremony)]
 struct General;
 
 #[tokio::main]
