@@ -18,6 +18,7 @@ async fn is_reported(ctx: &Context, message_id: u64, mod_id: u64) -> Option<Mess
         .await
         .unwrap();
     messages_after.retain(|m| {
+        !m.embeds.is_empty() &&
         m.embeds[0]
             .fields
             .iter()
