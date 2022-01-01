@@ -84,8 +84,19 @@ impl EventHandler for Handler {
             .await
             .ok();
 
-        let words = std::fs::read_to_string("blacklist.txt")
-            .expect("Expected blacklist.txt in running directory");
+        let words = match std::fs::read_to_string("blacklist.txt") {
+            Ok(s) => s,
+            Err(e) => {
+                match e.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        std::fs::File::create("blacklist.txt")
+                            .expect("Unable to create blacklist.txt");
+                    }
+                    _ => panic!("Unable to access blacklist.txt"),
+                }
+                String::new()
+            }
+        };
         for w in words.lines() {
             if msg.content.contains(w) {
                 msg.delete(&ctx.http).await.ok();

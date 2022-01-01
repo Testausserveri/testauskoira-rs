@@ -36,8 +36,19 @@ impl Database {
     }
     pub async fn get_most_active(&self, winner_count: u64) -> Result<Vec<(u64, i32)>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
-        let blacklist = std::fs::read_to_string("award_id_blacklist.txt")
-            .expect("Failed to read award blacklist");
+        let blacklist = match std::fs::read_to_string("award_id_blacklist.txt") {
+            Ok(s) => s,
+            Err(e) => {
+                match e.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        std::fs::File::create("award_id_blacklist.txt")
+                            .expect("Unable to create award_id_blacklist.txt");
+                    }
+                    _ => panic!("Unable to access award_id_blacklist.txt"),
+                }
+                String::new()
+            }
+        };
         let blacklist = blacklist
             .lines()
             .map(|s| format!("'{}'", s))
