@@ -24,6 +24,10 @@ features = ["macros", "rt-multi-thread","signal"]
 version = "0.5"
 features = ["mysql","runtime-tokio-rustls","bigdecimal"]
 
+[dependencies.openssl-sys]
+version = "0.9.71"
+features = ["vendored"]
+
 [dependencies]
 tracing = "0.1"
 tracing-futures = "0.2"
