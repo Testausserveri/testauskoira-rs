@@ -98,8 +98,12 @@ impl EventHandler for Handler {
             }
         };
         for w in words.lines() {
-            if msg.content.contains(w) {
-                msg.delete(&ctx.http).await.ok();
+            // FIXME: The regexes should probably be stored somewhere
+            // instead of being created on every message
+            if let Ok(t) = regex::Regex::new(w) {
+                if t.is_match(&msg.content) {
+                    msg.delete(&ctx.http).await.ok();
+                }
             }
         }
     }
