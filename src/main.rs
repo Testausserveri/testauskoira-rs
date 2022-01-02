@@ -135,6 +135,7 @@ impl EventHandler for Handler {
         for re in &regexes.lock().await.regexvec {
             if re.is_match(&msg.content) {
                 msg.delete(&ctx.http).await.ok();
+                break;
             }
         }
     }
