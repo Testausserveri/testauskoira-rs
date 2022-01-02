@@ -13,11 +13,13 @@ use crate::{
 // else: Returns None
 async fn is_reported(ctx: &Context, message_id: u64, mod_id: u64) -> Option<Message> {
     let mod_channel_id = ChannelId(mod_id);
+    let cur_id = ctx.cache.current_user_id().await;
     let mut messages_after = mod_channel_id
         .messages(&ctx.http, |r| r.after(MessageId(message_id)))
         .await
         .unwrap();
     messages_after.retain(|m| {
+        m.author.id == cur_id;
         !m.embeds.is_empty()
             && m.embeds[0]
                 .fields
@@ -175,15 +177,15 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                 e.field(
                     format!(
                         "Poistamisen puolesta 0/{}",
-                        (0.25_f64 * mods_online as f64 + 1.0_f64).round()
-                    ),
+                        (mods_online as f32).sqrt().clamp(1.,3.).round()
+                        ),
                     "-",
                     true,
                 );
                 e.field(
                     format!(
                         "Porttikiellon puolesta 0/{}",
-                        (0.5_f64 * mods_online as f64 + 1.0_f64).round()
+                        (mods_online as f32).sqrt().round()
                     ),
                     "-",
                     true,
