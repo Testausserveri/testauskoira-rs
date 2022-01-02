@@ -37,6 +37,23 @@ async fn is_reported(ctx: &Context, message_id: u64, mod_id: u64) -> Option<Mess
     }
 }
 
+// This function add the NO_REPORTS_ROLE for the user provided
+async fn prevent_further_reports(ctx: &Context, user_id: u64) {
+    let no_reports_role_id: u64 = env::var("NO_REPORTS_ROLE_ID")
+        .expect("Expected NO_REPORTS_ROLE_ID in .env")
+        .parse()
+        .expect("Invalid NO_REPORTS_ROLE_ID provided");
+
+    let guild_id: u64 = env::var("GUILD_ID")
+        .expect("Expected GUILD_ID in .env")
+        .parse()
+        .expect("Invalid GUILD_ID provided");
+
+    let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
+    member.add_role(&ctx.http, no_reports_role_id).await.unwrap();
+    info!("Added no-reports-role for {}", user_id);
+}
+
 // This handles a message_changed event an checks for
 // reported messages that are edited. It then updates the message on the
 // moderation channel with the message's new content and the time of the edit.
@@ -106,6 +123,11 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
                         b.label("Erota jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
+                    });
+                    r.create_button(|b| {
+                        b.label("Estä ilmoittaja");
+                        b.style(ButtonStyle::Danger);
+                        b.custom_id("abuse_button")
                     })
                 })
             })
@@ -118,6 +140,32 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
 // This sends an embed to the moderation channel, containing some information about the message
 // and the reported
 pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInteraction) {
+    let no_reports_role_id: u64 = env::var("NO_REPORTS_ROLE_ID")
+        .expect("Expected NO_REPORTS_ROLE_ID in .env")
+        .parse()
+        .expect("Invalid NO_REPORTS_ROLE_ID provided");
+
+    let guild_id: u64 = env::var("GUILD_ID")
+        .expect("Expected GUILD_ID in .env")
+        .parse()
+        .expect("Invalid GUILD_ID provided");
+
+    if interaction.user.has_role(&ctx.http, guild_id, no_reports_role_id).await.unwrap() {
+        info!("Skipping blacklisted reporter {}", interaction.user.id.0);
+        interaction
+            .create_interaction_response(&ctx.http, |r| {
+                r.interaction_response_data(|d| {
+                    d.flags(
+                        serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
+                        );
+                    d.content("Sinut on hyllytetty ilmoitus-ominaisuuden väärinkäytöstä :rage:! Ilmoitustasi ei lähetetty.")
+                });
+                r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
+            })
+        .await
+        .unwrap();
+        return;
+    }
     interaction
         .create_interaction_response(&ctx.http, |r| {
             r.interaction_response_data(|d| {
@@ -190,6 +238,14 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                     "-",
                     true,
                 );
+                e.field(
+                    format!(
+                        "Ilmoittajan estämisen puolesta 0/{}",
+                        (mods_online as f32).sqrt().clamp(1., 3.).round()
+                    ),
+                    "-",
+                    true,
+                );
                 e.footer(|f| {
                     f.text(format!(
                         "Viesti lähetetty: {}",
@@ -208,6 +264,11 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                         b.label("Erota jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
+                    });
+                    r.create_button(|b| {
+                        b.label("Estä ilmoittaja");
+                        b.style(ButtonStyle::Danger);
+                        b.custom_id("abuse_button")
                     })
                 })
             })
@@ -357,6 +418,11 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
                             b.label("Erota jäsen");
                             b.style(ButtonStyle::Danger);
                             b.custom_id("ban_button")
+                        });
+                        r.create_button(|b| {
+                            b.label("Estä ilmoittaja");
+                            b.style(ButtonStyle::Danger);
+                            b.custom_id("abuse_button")
                         })
                     })
                 });
@@ -489,6 +555,108 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
                             b.style(ButtonStyle::Danger);
                             b.disabled(true);
                             b.custom_id("ban_button")
+                        });
+                        r.create_button(|b| {
+                            b.label("Estä ilmoittaja");
+                            b.style(ButtonStyle::Danger);
+                            b.custom_id("abuse_button")
+                        })
+                    })
+                });
+            }
+            m
+        })
+        .await
+        .unwrap();
+}
+
+// This function handles the press off the "abuse_button"
+// If the vote-goal is reached, the user will be given a
+// role that prevents them from further abusing the reporting feature
+async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
+    let mut original_embed = message.embeds.first().unwrap().clone();
+    let abuse_field_index = original_embed
+        .fields
+        .iter()
+        .position(|f| f.name.starts_with("Ilmoittajan estämisen"))
+        .unwrap();
+    if original_embed.fields[abuse_field_index]
+        .value
+        .contains(&voter.id.to_string())
+    {
+        return;
+    }
+    let name = &original_embed.fields[abuse_field_index].name;
+    let mut current_count = name[name.rfind(' ').unwrap() + 1..name.rfind('/').unwrap()]
+        .parse::<i64>()
+        .unwrap();
+    let required_count = name[name.rfind('/').unwrap() + 1..name.len()]
+        .parse::<i64>()
+        .unwrap();
+    current_count += 1;
+    if current_count >= required_count {
+        let user_id_string = &original_embed
+            .fields
+            .iter()
+            .find(|f| f.name.starts_with("Ilmoituksen tehnyt"))
+            .unwrap()
+            .value;
+        let user_id: u64 = user_id_string[user_id_string.find('@').unwrap()+1..user_id_string.rfind('>').unwrap()].parse().unwrap();
+        original_embed.title = Some("Ilmoittaja on estetty!".to_string());
+        prevent_further_reports(ctx, user_id).await;
+    }
+    let new_name = format!(
+        "Ilmoittajan estämisen puolesta {}/{}",
+        current_count, required_count
+    );
+    let new_value = match original_embed.fields[abuse_field_index].value.as_ref() {
+        "-" => format!("{}", voter),
+        _ => format!(
+            "{}\n{}",
+            voter, &original_embed.fields[abuse_field_index].value
+        ),
+    };
+    original_embed.fields[abuse_field_index] = EmbedField::new(new_name, new_value, false);
+    let mut actionrow = message.components.clone();
+    if let ActionRowComponent::Button(button) = &mut actionrow[0].components[0] {
+        button.disabled = true;
+    }
+    let mut original_embeds = message.embeds.clone();
+    original_embeds[0] = original_embed.clone();
+    let mut original_embeds: Vec<CreateEmbed> = original_embeds
+        .iter()
+        .map(|e| CreateEmbed::from(e.to_owned()))
+        .collect();
+    if current_count >= required_count {
+        original_embeds[0].footer(|f| {
+            f.text(format!(
+                "{}\nIlmoittaja estetty: {}",
+                original_embed.footer.clone().unwrap().text,
+                chrono::Local::now()
+            ))
+        });
+    }
+    message
+        .edit(&ctx.http, |m| {
+            m.set_embeds(original_embeds);
+            if current_count >= required_count {
+                m.components(|c| {
+                    c.create_action_row(|r| {
+                        r.create_button(|b| {
+                            b.label("Poista viesti");
+                            b.style(ButtonStyle::Secondary);
+                            b.custom_id("delete_button")
+                        });
+                        r.create_button(|b| {
+                            b.label("Erota jäsen");
+                            b.style(ButtonStyle::Danger);
+                            b.custom_id("ban_button")
+                        });
+                        r.create_button(|b| {
+                            b.label("Estä ilmoittaja");
+                            b.disabled(true);
+                            b.style(ButtonStyle::Danger);
+                            b.custom_id("abuse_button")
                         })
                     })
                 });
@@ -511,6 +679,10 @@ pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
             "ban_button" => {
                 info!("Ban vote by {}", component.user.tag());
                 add_ban_vote(&ctx, component.user.clone(), &mut component.message).await;
+            },
+            "abuse_button" => {
+                info!("Abuse vote by {}", component.user.tag());
+                add_abuse_vote(&ctx, component.user.clone(), &mut component.message).await;
             }
             _ => panic!("Unknown interaction: {}", component.data.custom_id),
         }
