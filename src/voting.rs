@@ -19,8 +19,8 @@ async fn is_reported(ctx: &Context, message_id: u64, mod_id: u64) -> Option<Mess
         .await
         .unwrap();
     messages_after.retain(|m| {
-        m.author.id == cur_id;
-        !m.embeds.is_empty()
+        m.author.id == cur_id
+            && !m.embeds.is_empty()
             && m.embeds[0]
                 .fields
                 .iter()
@@ -177,8 +177,8 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                 e.field(
                     format!(
                         "Poistamisen puolesta 0/{}",
-                        (mods_online as f32).sqrt().clamp(1.,3.).round()
-                        ),
+                        (mods_online as f32).sqrt().clamp(1., 3.).round()
+                    ),
                     "-",
                     true,
                 );
