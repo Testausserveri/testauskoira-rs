@@ -36,6 +36,15 @@ impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
 }
 
+pub struct BlacklistRegexes {
+    last_edited: std::time::SystemTime,
+    regexvec: Vec<regex::Regex>,
+}
+
+impl TypeMapKey for BlacklistRegexes {
+    type Value = Arc<Mutex<BlacklistRegexes>>;
+}
+
 struct Handler;
 
 #[async_trait]
@@ -97,16 +106,35 @@ impl EventHandler for Handler {
                 String::new()
             }
         };
-        for w in words.lines() {
-            if w.is_empty() {
-                continue;
-            }
-            // FIXME: The regexes should probably be stored somewhere
-            // instead of being created on every message
-            if let Ok(t) = regex::Regex::new(w) {
-                if t.is_match(&msg.content) {
-                    msg.delete(&ctx.http).await.ok();
+
+        let mut data = ctx.data.write().await;
+        let regexes = data.get_mut::<BlacklistRegexes>().unwrap();
+
+        let last_edited = std::fs::metadata("blacklist.txt")
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        if last_edited != regexes.lock().await.last_edited {
+            info!("Generating new blacklist regexes");
+            let mut new_vec = Vec::new();
+            for w in words.lines() {
+                if w.is_empty() {
+                    continue;
                 }
+                if let Ok(r) = regex::Regex::new(w) {
+                    new_vec.push(r);
+                }
+            }
+            *regexes.lock().await = BlacklistRegexes {
+                last_edited,
+                regexvec: new_vec,
+            };
+        }
+
+        for re in &regexes.lock().await.regexvec {
+            if re.is_match(&msg.content) {
+                msg.delete(&ctx.http).await.ok();
             }
         }
     }
@@ -176,6 +204,40 @@ async fn main() {
         Err(why) => panic!("Could not access application info: {:?}", why),
     };
 
+    let words = match std::fs::read_to_string("blacklist.txt") {
+        Ok(s) => s,
+        Err(e) => {
+            match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    std::fs::File::create("blacklist.txt").expect("Unable to create blacklist.txt");
+                }
+                _ => panic!("Unable to access blacklist.txt"),
+            }
+            String::new()
+        }
+    };
+
+    let mut regexvec = Vec::new();
+
+    for w in words.lines() {
+        if w.is_empty() {
+            continue;
+        }
+        if let Ok(re) = regex::Regex::new(w) {
+            regexvec.push(re);
+        } else {
+            info!("Skipping invalid regex in `blacklist.txt`: {}", w);
+        }
+    }
+
+    let blacklist = BlacklistRegexes {
+        last_edited: std::fs::metadata("blacklist.txt")
+            .unwrap()
+            .modified()
+            .unwrap(),
+        regexvec,
+    };
+
     let framework = StandardFramework::new()
         .configure(|c| c.owners(owners).prefix("!"))
         .group(&GENERAL_GROUP);
@@ -196,6 +258,7 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<Database>(Arc::new(database));
+        data.insert::<BlacklistRegexes>(Arc::new(Mutex::new(blacklist)));
     }
 
     let shard_manager = client.shard_manager.clone();
