@@ -98,6 +98,9 @@ impl EventHandler for Handler {
             }
         };
         for w in words.lines() {
+            if w.is_empty() {
+                continue;
+            }
             // FIXME: The regexes should probably be stored somewhere
             // instead of being created on every message
             if let Ok(t) = regex::Regex::new(w) {
