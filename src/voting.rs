@@ -217,10 +217,16 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     let message_link = suspect_message.link_ensured(&ctx.http).await;
     suspect
         .dm(&ctx.http, |m| {
-            m.content(format!(
-                "Viestistäsi {} on tehty ilmoitus moderaattoreille!",
-                message_link
-            ))
+            m.content("Viestistäsi on tehty ilmoitus moderaattoreille!");
+            m.components(|c| {
+                c.create_action_row(|r| {
+                    r.create_button(|b| {
+                        b.label("Näytä viesti");
+                        b.style(ButtonStyle::Link);
+                        b.url(message_link)
+                    })
+                })
+            })
         })
         .await
         .unwrap();
