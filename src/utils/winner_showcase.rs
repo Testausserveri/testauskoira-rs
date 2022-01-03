@@ -5,7 +5,6 @@ use serenity::http::client::Http;
 use serenity::model::id::ChannelId;
 use tracing::error;
 
-
 use crate::database::Database;
 
 async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
@@ -26,7 +25,11 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
         return;
     }
     let mut previous_winner_member = http.get_member(guild_id, previous_winner).await.unwrap();
-    if (previous_winner_member.remove_role(http, award_role_id).await).is_ok() {
+    if (previous_winner_member
+        .remove_role(http, award_role_id)
+        .await)
+        .is_ok()
+    {
         info!("Removed role from previous winner {}", previous_winner);
     } else {
         info!("No previous winner");

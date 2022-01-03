@@ -50,7 +50,10 @@ async fn prevent_further_reports(ctx: &Context, user_id: u64) {
         .expect("Invalid GUILD_ID provided");
 
     let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
-    member.add_role(&ctx.http, no_reports_role_id).await.unwrap();
+    member
+        .add_role(&ctx.http, no_reports_role_id)
+        .await
+        .unwrap();
     info!("Added no-reports-role for {}", user_id);
 }
 
@@ -150,7 +153,12 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .parse()
         .expect("Invalid GUILD_ID provided");
 
-    if interaction.user.has_role(&ctx.http, guild_id, no_reports_role_id).await.unwrap() {
+    if interaction
+        .user
+        .has_role(&ctx.http, guild_id, no_reports_role_id)
+        .await
+        .unwrap()
+    {
         info!("Skipping blacklisted reporter {}", interaction.user.id.0);
         interaction
             .create_interaction_response(&ctx.http, |r| {
@@ -360,9 +368,7 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
             .value
             .parse::<u64>()
             .unwrap();
-        original_embed.title = Some(
-            "Viesti on poistettu".to_string()
-        );
+        original_embed.title = Some("Viesti on poistettu".to_string());
         info!("Poistetaan viesti {} kanavalta {}", message_id, channel_id);
         let sus_message = ctx.http.get_message(channel_id, message_id).await.unwrap();
         sus_message.delete(&ctx.http).await.unwrap();
@@ -481,15 +487,9 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
         let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
         info!("Hiljennetään käyttäjä {}", member.user);
         member.add_role(&ctx.http, silence_role_id).await.unwrap();
-        original_embed.title = Some(format!(
-            "Käyttäjä {} on hiljennetty!",
-            member.user.tag()
-        ));
+        original_embed.title = Some(format!("Käyttäjä {} on hiljennetty!", member.user.tag()));
     }
-    let new_name = format!(
-        "Hiljennyksen puolesta {}/{}",
-        current_count, required_count
-    );
+    let new_name = format!("Hiljennyksen puolesta {}/{}", current_count, required_count);
     let new_value = match original_embed.fields[ban_field_index].value.as_ref() {
         "-" => format!("{}", voter),
         _ => format!(
@@ -579,7 +579,10 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
             .find(|f| f.name.starts_with("Ilmoituksen tehnyt"))
             .unwrap()
             .value;
-        let user_id: u64 = user_id_string[user_id_string.find('@').unwrap()+1..user_id_string.rfind('>').unwrap()].parse().unwrap();
+        let user_id: u64 = user_id_string
+            [user_id_string.find('@').unwrap() + 1..user_id_string.rfind('>').unwrap()]
+            .parse()
+            .unwrap();
         original_embed.title = Some("Ilmoittaja on estetty!".to_string());
         prevent_further_reports(ctx, user_id).await;
     }
@@ -657,7 +660,7 @@ pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
             "ban_button" => {
                 info!("Ban vote by {}", component.user.tag());
                 add_ban_vote(&ctx, component.user.clone(), &mut component.message).await;
-            },
+            }
             "abuse_button" => {
                 info!("Abuse vote by {}", component.user.tag());
                 add_abuse_vote(&ctx, component.user.clone(), &mut component.message).await;

@@ -34,7 +34,11 @@ impl Database {
         };
         Ok(value)
     }
-    pub async fn get_most_active(&self, winner_count: u64, days_pre: i32) -> Result<Vec<(u64, i32)>, sqlx::Error> {
+    pub async fn get_most_active(
+        &self,
+        winner_count: u64,
+        days_pre: i32,
+    ) -> Result<Vec<(u64, i32)>, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
         let blacklist = match std::fs::read_to_string("award_id_blacklist.txt") {
             Ok(s) => s,
