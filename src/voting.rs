@@ -120,7 +120,7 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
                         b.custom_id("delete_button")
                     });
                     r.create_button(|b| {
-                        b.label("Erota jäsen");
+                        b.label("Hiljennä jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
                     });
@@ -232,7 +232,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                 );
                 e.field(
                     format!(
-                        "Porttikiellon puolesta 0/{}",
+                        "Hiljennyksen puolesta 0/{}",
                         (mods_online as f32).sqrt().round()
                     ),
                     "-",
@@ -261,7 +261,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                         b.custom_id("delete_button")
                     });
                     r.create_button(|b| {
-                        b.label("Erota jäsen");
+                        b.label("Hiljennä jäsen");
                         b.style(ButtonStyle::Danger);
                         b.custom_id("ban_button")
                     });
@@ -360,16 +360,9 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
             .value
             .parse::<u64>()
             .unwrap();
-        original_embed.title = Some(format!(
-            "{} on poistettu!",
-            &original_embed.title.as_ref().unwrap()[..original_embed
-                .title
-                .as_ref()
-                .unwrap()
-                .find("viesti")
-                .unwrap()
-                + 6]
-        ));
+        original_embed.title = Some(
+            "Viesti on poistettu".to_string()
+        );
         info!("Poistetaan viesti {} kanavalta {}", message_id, channel_id);
         let sus_message = ctx.http.get_message(channel_id, message_id).await.unwrap();
         sus_message.delete(&ctx.http).await.unwrap();
@@ -415,7 +408,7 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
                             b.custom_id("delete_button")
                         });
                         r.create_button(|b| {
-                            b.label("Erota jäsen");
+                            b.label("Hiljennä jäsen");
                             b.style(ButtonStyle::Danger);
                             b.custom_id("ban_button")
                         });
@@ -438,23 +431,21 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
 // and then acts accordingly, either by banning the member and then updating
 // the announcement on the moderation channel or just by updating the announcement
 //
-// NOTE: The ban applied on a member is a "soft-ban" which means the member will
-// be banned (and their messages will be deleted from the past hour) and immediately
-// after the unbanned
+// NOTE: The ban actually only applies the "silenced" role upon the user
 async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
     let mut original_embed = message.embeds.first().unwrap().clone();
     if original_embed
         .title
         .as_ref()
         .unwrap()
-        .contains("porttikielto")
+        .contains("hiljennetty")
     {
         return;
     }
     let ban_field_index = original_embed
         .fields
         .iter()
-        .position(|f| f.name.starts_with("Porttikiellon"))
+        .position(|f| f.name.starts_with("Hiljennyksen"))
         .unwrap();
     if original_embed.fields[ban_field_index]
         .value
@@ -483,32 +474,20 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
             .expect("GUILD_ID expected")
             .parse::<u64>()
             .expect("Invalid guild id");
-        let member = ctx.http.get_member(guild_id, user_id).await.unwrap();
-        info!("Annetaan porttikielto käyttäjälle {}", member.user);
+        let silence_role_id: u64 = env::var("SILENCED_ROLE_ID")
+            .expect("SILENCED_ROLE_ID expected")
+            .parse()
+            .expect("Invalid SILENCED_ROLE_ID provided");
+        let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
+        info!("Hiljennetään käyttäjä {}", member.user);
+        member.add_role(&ctx.http, silence_role_id).await.unwrap();
         original_embed.title = Some(format!(
-            "Käyttäjälle {} on annettu porttikielto!",
+            "Käyttäjä {} on hiljennetty!",
             member.user.tag()
         ));
-        let member = ctx
-            .http
-            .get_member(guild_id, member.user.id.0)
-            .await
-            .unwrap();
-        member
-            .ban_with_reason(
-                &ctx.http,
-                1,
-                format!(
-                    "Voted off by the moderator council: {}",
-                    message.link_ensured(&ctx.http).await
-                ),
-            )
-            .await
-            .unwrap();
-        member.unban(&ctx.http).await.unwrap();
     }
     let new_name = format!(
-        "Porttikiellon puolesta {}/{}",
+        "Hiljennyksen puolesta {}/{}",
         current_count, required_count
     );
     let new_value = match original_embed.fields[ban_field_index].value.as_ref() {
@@ -532,7 +511,7 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
     if current_count >= required_count {
         original_embeds[0].footer(|f| {
             f.text(format!(
-                "{}\nPorttikielto annettu: {}",
+                "{}\nKäyttäjä hiljennetty: {}",
                 original_embed.footer.clone().unwrap().text,
                 chrono::Local::now()
             ))
@@ -547,11 +526,10 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
                         r.create_button(|b| {
                             b.label("Poista viesti");
                             b.style(ButtonStyle::Secondary);
-                            b.disabled(true);
                             b.custom_id("delete_button")
                         });
                         r.create_button(|b| {
-                            b.label("Erota jäsen");
+                            b.label("Hiljennä jäsen");
                             b.style(ButtonStyle::Danger);
                             b.disabled(true);
                             b.custom_id("ban_button")
@@ -648,7 +626,7 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
                             b.custom_id("delete_button")
                         });
                         r.create_button(|b| {
-                            b.label("Erota jäsen");
+                            b.label("Hiljennä jäsen");
                             b.style(ButtonStyle::Danger);
                             b.custom_id("ban_button")
                         });
