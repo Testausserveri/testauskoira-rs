@@ -29,7 +29,12 @@ jobs:
         run: cargo build --release
         env:
           DATABASE_URL: mysql://root:root@localhost:3306/Testauskoira
-      - uses: actions/upload-artifact@v2
+      - name: deploy file
+        uses: wlixcc/SFTP-Deploy-Action@v1.0
         with:
-          name: build
-          path: target/release/testauskoira-rs
+          username: ${{ secrets.SSH_USER }}
+          server:  ${{ secrets.SSH_IP }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }} 
+          local_path: './target/release/testauskoira-rs'
+          remote_path: ${{ secrets.SSH_DIR }}
+          args: '-o ConnectTimeout=5'
