@@ -20,7 +20,11 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
 
     let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
     winner_member.add_role(http, award_role_id).await.unwrap();
-    let previous_winner = db.get_most_active(1, 1).await.unwrap()[0].0;
+    let yesterdays_competition = db.get_most_active(1, 1).await.unwrap();
+    if yesterdays_competition.is_empty() {
+        return;
+    }
+    let previous_winner = yesterdays_competition[0].0;
     if previous_winner == winner {
         return;
     }
