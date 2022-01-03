@@ -10,11 +10,26 @@ env:
 
 jobs:
   build:
-
+    name: Build
     runs-on: ubuntu-latest
-
+    services:
+      mysql:
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+      - name: Install database
+        run: mysql mysql -u root -proot -h 127.0.0.1 < database.sql
+      - name: Build
+        run: cargo build --release
+        env:
+          DATABASE_URL: mysql://root:root@localhost:3306/Testauskoira
+      - uses: actions/upload-artifact@v2
+        with:
+          name: build
+          path: target/release/ruokabotti-rs
