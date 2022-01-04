@@ -1,45 +1,53 @@
-use num_traits::cast::ToPrimitive;
-use sqlx::mysql::MySqlQueryResult;
-
 use super::Database;
-
-#[derive(sqlx::FromRow)]
-struct Member {
-    message_count: i32,
-    userid: String,
-}
+use diesel::prelude::*;
 
 impl Database {
     pub async fn increment_message_count(
         &self,
-        userid: &u64,
-    ) -> Result<MySqlQueryResult, sqlx::Error> {
-        let mut conn = self.pool.acquire().await.unwrap();
-        sqlx::query!("INSERT INTO `messages_day_stat` SET `message_count` = 1, `userid` = ?, `date` = CURDATE() ON DUPLICATE KEY UPDATE `message_count` = `message_count` + 1",
-        userid.to_string())
-            .execute(&mut conn)
-            .await
-    }
-    pub async fn get_total_daily_messages(&self) -> Result<u64, sqlx::Error> {
-        let mut conn = self.pool.acquire().await?;
-        let value = sqlx::query_scalar!(
-            "SELECT SUM(`message_count`) FROM `messages_day_stat` WHERE `date` = CURDATE()"
-        )
-        .fetch_one(&mut conn)
-        .await?;
+        in_userid: &u64,
+    ) -> Result<usize, anyhow::Error> {
+        // FIXME: This could be optimized if necessary
+        let curdate = chrono::Local::today().naive_local();
+        use crate::schema::messages_day_stat::dsl::*;
+        let current_count = messages_day_stat.filter(userid.eq(in_userid.to_string()).and(date.eq(curdate)))
+            .select(message_count)
+            .first::<Option<i32>>(&self.pool.get()?).unwrap_or(None);
 
-        let value = match value {
-            Some(e) => e.to_u64().unwrap(),
-            None => 0,
-        };
+        Ok(match current_count {
+            Some(c) => {
+                diesel::update(messages_day_stat.filter(userid.eq(in_userid.to_string()).and(date.eq(curdate))))
+                    .set(message_count.eq(c+1))
+                    .execute(&self.pool.get()?)?
+            },
+            None => {
+                let new_entry = crate::models::NewUserMessageStat {
+                    date: curdate,
+                    userid: in_userid.to_string(),
+                    message_count: 1
+                };
+                use crate::schema::messages_day_stat;
+                diesel::insert_into(messages_day_stat::table)
+                    .values(&new_entry)
+                    .execute(&self.pool.get()?)?
+            },
+        })
+    }
+    pub async fn get_total_daily_messages(&self) -> Result<i64, anyhow::Error> {
+        let curdate = chrono::Local::today().naive_local();
+        use crate::schema::messages_day_stat::dsl::*;
+
+        let value = messages_day_stat.filter(date.eq(curdate))
+            .select(diesel::dsl::sum(message_count))
+            .first::<Option<i64>>(&self.pool.get()?)?;
+
+        let value = value.unwrap_or(0);
         Ok(value)
     }
     pub async fn get_most_active(
         &self,
-        winner_count: u64,
+        winner_count: i64,
         days_pre: i32,
-    ) -> Result<Vec<(u64, i32)>, sqlx::Error> {
-        let mut conn = self.pool.acquire().await?;
+    ) -> Result<Vec<(u64, i32)>, anyhow::Error> {
         let blacklist = match std::fs::read_to_string("award_id_blacklist.txt") {
             Ok(s) => s,
             Err(e) => {
@@ -53,18 +61,20 @@ impl Database {
                 String::new()
             }
         };
-        let blacklist = blacklist
-            .lines()
-            .map(|s| format!("'{}'", s))
-            .collect::<Vec<_>>()
-            .join(",");
+        let blacklist = blacklist.lines();
+        let curdate = chrono::Local::today().naive_local()-chrono::Duration::days(days_pre.into());
 
-        let members: Vec<Member> = sqlx::query_as(&format!("SELECT `userid`,`message_count` FROM `messages_day_stat` WHERE `date` = SUBDATE(CURRENT_DATE, {}) AND `userid` NOT IN ( {} ) ORDER BY `message_count` DESC LIMIT {}", days_pre, &blacklist, winner_count))
-            .fetch_all(&mut conn)
-            .await?;
+        use crate::schema::messages_day_stat::dsl::*;
+
+        let members = messages_day_stat.filter(date.eq(curdate).and(userid.ne_all(blacklist)))
+            .select((userid, message_count))
+            .order(message_count.desc())
+            .limit(winner_count)
+            .load::<(Option<String>, Option<i32>)>(&self.pool.get()?)?;
+
         let members = members
             .iter()
-            .map(|m| (m.userid.parse::<u64>().unwrap(), m.message_count))
+            .map(|m| (m.0.as_ref().unwrap().parse::<u64>().unwrap(), m.1.unwrap()))
             .collect();
         Ok(members)
     }
