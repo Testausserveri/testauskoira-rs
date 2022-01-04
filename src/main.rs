@@ -1,3 +1,5 @@
+pub mod schema;
+pub mod models;
 pub mod commands;
 pub mod database;
 pub mod extensions;
@@ -7,7 +9,7 @@ pub mod voting;
 #[macro_use]
 extern crate tracing;
 #[macro_use]
-extern crate serde_derive;
+extern crate diesel;
 
 use std::collections::HashSet;
 use std::env;
@@ -26,8 +28,6 @@ use serenity::model::event::{MessageUpdateEvent, ResumedEvent};
 use serenity::model::gateway::Ready;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use tracing_subscriber::filter::EnvFilter;
-use tracing_subscriber::FmtSubscriber;
 use utils::winner_showcase::*;
 
 pub struct ShardManagerContainer;
@@ -182,9 +182,7 @@ struct General;
 async fn main() {
     dotenv::dotenv().expect("Failed to load .env file");
 
-    FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::new("info,sqlx::query=error"))
-        .init();
+    tracing_subscriber::fmt::init();
 
     let database = Database::new().await;
 
@@ -258,7 +256,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<Database>(Arc::new(database));
+        data.insert::<Database>(database);
         data.insert::<BlacklistRegexes>(Arc::new(Mutex::new(blacklist)));
     }
 

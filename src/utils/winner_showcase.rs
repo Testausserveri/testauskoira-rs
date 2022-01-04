@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::database::Database;
 
-async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
+async fn give_award_role(http: &Http, db: Database, winner: u64) {
     let award_role_id: u64 = env::var("AWARD_ROLE_ID")
         .expect("No AWARD_ROLE_ID in .env")
         .parse()
@@ -40,7 +40,7 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     }
 }
 
-pub async fn display_winner(http: Arc<Http>, db: Arc<Database>) {
+pub async fn display_winner(http: Arc<Http>, db: Database) {
     let winners = db.get_most_active(5, 0).await.unwrap();
     let total_msgs = db.get_total_daily_messages().await.unwrap();
 
