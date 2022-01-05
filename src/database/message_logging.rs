@@ -14,12 +14,12 @@ impl Database {
             .first::<Option<i32>>(&self.pool.get()?).unwrap_or(None);
 
         Ok(match current_count {
-            Some(c) => {
+            Some(c) if in_userid != &371362063273951232 => {
                 diesel::update(messages_day_stat.filter(userid.eq(in_userid.to_string()).and(date.eq(curdate))))
                     .set(message_count.eq(c+1))
                     .execute(&self.pool.get()?)?
             },
-            None => {
+            _ => {
                 let new_entry = crate::models::NewUserMessageStat {
                     date: curdate,
                     userid: in_userid.to_string(),
