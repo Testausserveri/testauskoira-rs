@@ -1,8 +1,8 @@
-pub mod schema;
-pub mod models;
 pub mod commands;
 pub mod database;
 pub mod extensions;
+pub mod models;
+pub mod schema;
 pub mod utils;
 pub mod voting;
 
@@ -137,7 +137,9 @@ impl EventHandler for Handler {
             }
         }
 
-        if msg.guild_id.unwrap() != env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() { return };
+        if msg.guild_id.unwrap() != env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
+            return;
+        };
         db.increment_message_count(msg.author.id.as_u64())
             .await
             .ok();

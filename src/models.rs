@@ -93,4 +93,3 @@ pub struct NewSuspectMessageEdit {
     pub new_content: String,
     pub edit_time: chrono::NaiveDateTime,
 }
-

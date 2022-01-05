@@ -1,31 +1,48 @@
+use serenity::builder::EditMessage;
 use serenity::model::interactions::application_command::ApplicationCommandInteraction;
 use serenity::model::interactions::message_component::ButtonStyle;
-use serenity::builder::EditMessage;
+
 use crate::extensions::*;
-
 use crate::models::{CouncilVoting, SuspectMessageEdit, VotingAction};
+use crate::{env, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User};
 
-use crate::{
-    env, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
-};
-
-async fn is_reported(ctx: &Context, message_id: u64) -> bool{
+async fn is_reported(ctx: &Context, message_id: u64) -> bool {
     let db = ctx.get_db().await;
     db.is_reported(message_id).await.unwrap_or(false)
 }
 
-fn generate_moderation_message(message: &mut EditMessage, voting: CouncilVoting, edits: Vec<SuspectMessageEdit>, votes: Vec<VotingAction>) {
+fn generate_moderation_message(
+    message: &mut EditMessage,
+    voting: CouncilVoting,
+    edits: Vec<SuspectMessageEdit>,
+    votes: Vec<VotingAction>,
+) {
     let guild_id = env::var("GUILD_ID").expect("NO GUILD_ID in .env");
-    let message_link = format!("https://discord.com/channels/{}/{}/{}", guild_id, voting.suspect_message_channel_id, voting.suspect_message_id);
-    let mut delete_voters = votes.iter().filter(|x| x.vote_type == 0).map(|x| format!("\n<@{}>", x.voter_user_id)).collect::<String>();
+    let message_link = format!(
+        "https://discord.com/channels/{}/{}/{}",
+        guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
+    );
+    let mut delete_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 0)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
     if delete_voters.is_empty() {
         delete_voters = "-".to_string()
     }
-    let mut silence_voters = votes.iter().filter(|x| x.vote_type == 1).map(|x| format!("\n<@{}>", x.voter_user_id)).collect::<String>();
+    let mut silence_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 1)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
     if silence_voters.is_empty() {
         silence_voters = "-".to_string()
     }
-    let mut block_reporter_voters = votes.iter().filter(|x| x.vote_type == 2).map(|x| format!("\n<@{}>", x.voter_user_id)).collect::<String>();
+    let mut block_reporter_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 2)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
     if block_reporter_voters.is_empty() {
         block_reporter_voters = "-".to_string()
     }
@@ -33,51 +50,78 @@ fn generate_moderation_message(message: &mut EditMessage, voting: CouncilVoting,
         e.color(serenity::utils::Color::RED);
         e.title("Viestistä on tehty ilmoitus!");
         e.field("Arvojäseniä paikalla", voting.moderators_online, true);
-        e.field("Viestin kanava", format!("<#{}>", voting.suspect_message_channel_id), true);
-        e.field("Viestin lähettäny", format!("<@{}>", voting.suspect_id), true);
-        e.field("Ilmoitusten tehnyt", format!("<@{}>", voting.reporter_id), true);
-        e.description(format!("Viestin sisältö:\n```\n{}```", voting.suspect_message_content));
-        e.field(format!("Poistamisen puolesta {}/{}", voting.delete_votes, voting.delete_votes_required),
+        e.field(
+            "Viestin kanava",
+            format!("<#{}>", voting.suspect_message_channel_id),
+            true,
+        );
+        e.field(
+            "Viestin lähettäny",
+            format!("<@{}>", voting.suspect_id),
+            true,
+        );
+        e.field(
+            "Ilmoitusten tehnyt",
+            format!("<@{}>", voting.reporter_id),
+            true,
+        );
+        e.description(format!(
+            "Viestin sisältö:\n```\n{}```",
+            voting.suspect_message_content
+        ));
+        e.field(
+            format!(
+                "Poistamisen puolesta {}/{}",
+                voting.delete_votes, voting.delete_votes_required
+            ),
             delete_voters,
-            true
+            true,
         );
-        e.field(format!("Hiljennyksen puolesta {}/{}", voting.silence_votes, voting.silence_votes_required),
+        e.field(
+            format!(
+                "Hiljennyksen puolesta {}/{}",
+                voting.silence_votes, voting.silence_votes_required
+            ),
             silence_voters,
-            true
+            true,
         );
-        e.field(format!("Ilmoittajan estämisen puolesta {}/{}", voting.block_reporter_votes, voting.block_reporter_votes_required),
+        e.field(
+            format!(
+                "Ilmoittajan estämisen puolesta {}/{}",
+                voting.block_reporter_votes, voting.block_reporter_votes_required
+            ),
             block_reporter_voters,
-            true
+            true,
         );
         e.footer(|f| {
-            f.text(format!("Viesti lähetetty: {}", voting.suspect_message_send_time))
+            f.text(format!(
+                "Viesti lähetetty: {}",
+                voting.suspect_message_send_time
+            ))
         })
     });
     for edit in &edits {
         if edit.new_content.is_empty() {
             message.add_embed(|e| {
                 e.title("Viesti on poistettu");
-                e.footer(|f| {
-                    f.text(format!("Poiston ajankohta: {}", edit.edit_time))
-                })
+                e.footer(|f| f.text(format!("Poiston ajankohta: {}", edit.edit_time)))
             });
             break;
         }
         message.add_embed(|e| {
             e.title("Viestiä on muokattu");
             e.description(format!("Uusi sisältö:\n```\n{}```", edit.new_content));
-            e.footer(|f| {
-                f.text(format!("Muokkausajankohta: {}", edit.edit_time))
-            })
+            e.footer(|f| f.text(format!("Muokkausajankohta: {}", edit.edit_time)))
         });
-
     }
     message.components(|c| {
         c.create_action_row(|r| {
             r.create_button(|b| {
                 b.label("Poista viesti");
                 b.style(ButtonStyle::Secondary);
-                if voting.delete_votes == voting.delete_votes_required || (!edits.is_empty() && edits.last().unwrap().new_content.is_empty()) {
+                if voting.delete_votes == voting.delete_votes_required
+                    || (!edits.is_empty() && edits.last().unwrap().new_content.is_empty())
+                {
                     b.disabled(true);
                 }
                 b.custom_id("delete_button")
@@ -119,13 +163,18 @@ async fn update_voting_message(ctx: &Context, voting_message_id: u64) {
     let event = db.get_voting_event(voting_message_id).await.unwrap();
     let votes = db.get_voting_event_votes(voting_message_id).await.unwrap();
     let edits = db.get_voting_event_edits(voting_message_id).await.unwrap();
-    let mut message = ctx.http.get_message(moderation_channel_id, voting_message_id).await.unwrap();
-    message.edit(&ctx.http,
-        |m| {
+    let mut message = ctx
+        .http
+        .get_message(moderation_channel_id, voting_message_id)
+        .await
+        .unwrap();
+    message
+        .edit(&ctx.http, |m| {
             generate_moderation_message(m, event, edits, votes);
             m
-        }
-    ).await.unwrap()
+        })
+        .await
+        .unwrap()
 }
 
 // This handles a message_changed event an checks for
@@ -141,7 +190,9 @@ pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
     }
     let db = ctx.get_db().await;
     let voting_event = db.get_voting_event_for_message(event.id.0).await.unwrap();
-    db.add_edit_event(event.to_owned(), voting_event.vote_message_id).await.unwrap();
+    db.add_edit_event(event.to_owned(), voting_event.vote_message_id)
+        .await
+        .unwrap();
     update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
@@ -155,7 +206,12 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
     }
     let db = ctx.get_db().await;
     let voting_event = db.get_voting_event_for_message(message_id.0).await.unwrap();
-    db.message_deleted(chrono::Local::now().naive_local(), voting_event.vote_message_id).await.unwrap();
+    db.message_deleted(
+        chrono::Local::now().naive_local(),
+        voting_event.vote_message_id,
+    )
+    .await
+    .unwrap();
     update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
@@ -211,8 +267,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .expect("MOD_CHANNEL_ID id expected")
         .parse::<u64>()
         .expect("Invalid mod role id");
-    if is_reported(ctx, suspect_message.id.0).await
-    {
+    if is_reported(ctx, suspect_message.id.0).await {
         info!(
             "The message {} is already reported! Skipping...",
             suspect_message.id.0
@@ -225,14 +280,19 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     let voting_message = moderation_channel
         .id()
         .send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.title("Viestistä on tehty ilmoitus!")
-            })
+            m.embed(|e| e.title("Viestistä on tehty ilmoitus!"))
         })
         .await
         .unwrap();
     let db = ctx.get_db().await;
-    db.new_reported_message(voting_message.id.0, suspect_message.to_owned(), interaction.user.id.0, mods_online as i32).await.unwrap();
+    db.new_reported_message(
+        voting_message.id.0,
+        suspect_message.to_owned(),
+        interaction.user.id.0,
+        mods_online as i32,
+    )
+    .await
+    .unwrap();
     update_voting_message(ctx, voting_message.id.0).await;
     let message_link = suspect_message.link_ensured(&ctx.http).await;
     suspect
@@ -281,14 +341,28 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
     if event.delete_votes == event.delete_votes_required {
         return;
     }
-    if db.add_vote(event.vote_message_id, voter.id.0 as i64, 0).await.unwrap() == 0 {
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 0)
+        .await
+        .unwrap()
+        == 0
+    {
         return;
     }
     let event = db.get_voting_event(message.id.0).await.unwrap();
     if event.delete_votes == event.delete_votes_required {
-        let message = ctx.http.get_message(event.suspect_message_channel_id as u64, event.suspect_message_id as u64).await.unwrap();
+        let message = ctx
+            .http
+            .get_message(
+                event.suspect_message_channel_id as u64,
+                event.suspect_message_id as u64,
+            )
+            .await
+            .unwrap();
         message.delete(&ctx.http).await.unwrap();
-        db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id).await.unwrap();
+        db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
+            .await
+            .unwrap();
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
@@ -305,7 +379,12 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
     if event.silence_votes == event.silence_votes_required {
         return;
     }
-    if db.add_vote(event.vote_message_id, voter.id.0 as i64, 1).await.unwrap() == 0 {
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 1)
+        .await
+        .unwrap()
+        == 0
+    {
         return;
     }
     let event = db.get_voting_event(message.id.0).await.unwrap();
@@ -318,7 +397,11 @@ async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
             .expect("Expected SILENCED_ROLE_ID in .env")
             .parse()
             .expect("Invalid SILENCED_ROLE_ID provided");
-        let mut member = ctx.http.get_member(guild_id, event.suspect_id as u64).await.unwrap();
+        let mut member = ctx
+            .http
+            .get_member(guild_id, event.suspect_id as u64)
+            .await
+            .unwrap();
         member.add_role(&ctx.http, silence_role).await.unwrap();
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
@@ -333,7 +416,12 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     if event.block_reporter_votes == event.block_reporter_votes_required {
         return;
     }
-    if db.add_vote(event.vote_message_id, voter.id.0 as i64, 2).await.unwrap() == 0 {
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 2)
+        .await
+        .unwrap()
+        == 0
+    {
         return;
     }
     let event = db.get_voting_event(message.id.0).await.unwrap();
@@ -346,7 +434,11 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
             .expect("Expected NO_REPORTS_ROLE_ID in .env")
             .parse()
             .expect("Invalid NO_REPORTS_ROLE_ID provided");
-        let mut member = ctx.http.get_member(guild_id, event.suspect_id as u64).await.unwrap();
+        let mut member = ctx
+            .http
+            .get_member(guild_id, event.suspect_id as u64)
+            .await
+            .unwrap();
         member.add_role(&ctx.http, abuse_role).await.unwrap();
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
