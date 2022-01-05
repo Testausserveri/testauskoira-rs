@@ -12,23 +12,11 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql
-        env:
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v2
-      - name: Install database
-        run: mysql mysql -u root -proot -h 127.0.0.1 < database.sql
       - name: Build
         run: cargo build --release
-        env:
-          DATABASE_URL: mysql://root:root@localhost:3306/Testauskoira
       - name: deploy file
         uses: wlixcc/SFTP-Deploy-Action@v1.0
         with:
@@ -38,7 +26,7 @@ jobs:
           local_path: './target/release/testauskoira-rs'
           remote_path: ${{ secrets.SSH_DIR }}
           args: '-o ConnectTimeout=5'
-      - name: multiple command
+      - name: restart testauskoira
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.SSH_IP }}
