@@ -1,6 +1,3 @@
-CREATE DATABASE Testauskoira;
-USE Testauskoira;
-
 CREATE TABLE messages_day_stat(
   id INT(11) NOT NULL AUTO_INCREMENT,
   date DATE DEFAULT NULL,
