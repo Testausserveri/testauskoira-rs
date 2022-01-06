@@ -1,6 +1,4 @@
-extern crate photon_rs;
-
-use photon_rs::native::*;
+use std::io::Cursor;
 
 pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
     let img_url_base = &user_img_url[..user_img_url.rfind('.').unwrap()];
@@ -11,18 +9,23 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
         .await
         .unwrap();
 
-    let pfp_photon =
-        open_image_from_bytes(profile_picture.as_ref()).expect("The profile-pic should be open");
-    let mask_photon = open_image("img/blackcomposite.png").expect("mask.png should be open");
-    let mut pfp_photon = photon_rs::transform::resize(
-        &pfp_photon,
-        mask_photon.get_width(),
-        mask_photon.get_height(),
-        photon_rs::transform::SamplingFilter::Gaussian,
-    );
+    let pfp = image::io::Reader::new(Cursor::new(profile_picture)).
+        with_guessed_format().unwrap()
+        .decode().unwrap();
+    let mask = image::io::Reader::open("img/blackcomposite.png").unwrap()
+        .decode().unwrap();
 
-    photon_rs::multiple::watermark(&mut pfp_photon, &mask_photon, 0, 0);
-    save_image(pfp_photon, "pfp_new.png");
+    let mut pfp = pfp.to_rgba16();
+    let mask = mask.to_rgba16();
+
+    for (x, y, pixel) in pfp.enumerate_pixels_mut() {
+        if mask.get_pixel(x, y)[3] == 0 {
+            *pixel = *mask.get_pixel(x, y);
+        }
+    }
+
+    image::imageops::overlay(&mut pfp, &mask, 0, 0);
+    pfp.save("pfp_new.png").unwrap();
 
     Ok("pfp_new.png".to_string())
 }
