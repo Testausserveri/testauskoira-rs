@@ -1,6 +1,6 @@
 FROM rustlang/rust:nightly
-COPY src src
-COPY Cargo.toml Cargo.toml
-COPY Cargo.lock Cargo.lock
+WORKDIR /app
+COPY . .
 RUN cargo build --release
-CMD ["./target/release/testauskoira-rs"]
+RUN cargo install diesel_cli
+ENTRYPOINT ["./entrypoint.sh"]
