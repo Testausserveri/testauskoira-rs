@@ -1,0 +1,23 @@
+version: "3"
+
+services:
+  testauskoira-rs:
+    build: .
+    restart: "unless-stopped"
+    depends_on:
+      - testauskoira_mariadb
+    links:
+      - testauskoira_mariadb
+    volumes:
+      - .env:/app/.env
+      - ./img:/app/img
+
+  testauskoira_mariadb:
+    container_name: testauskoira_mariadb
+    image: mariadb
+    volumes:
+      - ./mariadb:/var/lib/mysql
+    environment:
+      - "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=true"
+    restart: "unless-stopped"
+

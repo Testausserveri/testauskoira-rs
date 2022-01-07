@@ -1,8 +1,9 @@
 use serenity::prelude::TypeMapKey;
 pub mod message_logging;
+pub mod voting;
 
-use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::mysql::MysqlConnection;
+use diesel::r2d2::{ConnectionManager, Pool};
 
 #[derive(Clone)]
 pub struct Database {

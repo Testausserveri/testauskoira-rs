@@ -31,20 +31,15 @@ Botti poistaa kaikki kielletyt tekstinpätkät jotka löytyvät blacklist.txt ti
 
 Tarvitset .env tiedoston joka sisältää kyseiset arvot:
 ```
-DISCORD_TOKEN=
 DATABASE_URL=
-
-APPLICATION_ID=
-AWARD_CHANNEL_ID=
+DISCORD_TOKEN=
 MOD_CHANNEL_ID=
-MEMBER_ROLE_ID=
+APPLICATION_ID=
 GUILD_ID=
-
-CLIENT_ID=
-CLIENT_SECRET=
-
-PAT=
-ORG_NAME=
+AWARD_CHANNEL_ID=
+NO_REPORTS_ROLE_ID=
+AWARD_ROLE_ID=
+SILENCED_ROLE_ID=
 ```
 
 Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:

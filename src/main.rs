@@ -1,8 +1,8 @@
-pub mod schema;
-pub mod models;
 pub mod commands;
 pub mod database;
 pub mod extensions;
+pub mod models;
+pub mod schema;
 pub mod utils;
 pub mod voting;
 
@@ -89,10 +89,8 @@ impl EventHandler for Handler {
 
     async fn message(&self, ctx: Context, msg: Message) {
         let db = ctx.get_db().await;
-        db.increment_message_count(msg.author.id.as_u64())
-            .await
-            .ok();
 
+        // FIXME: Store in memory
         let words = match std::fs::read_to_string("blacklist.txt") {
             Ok(s) => s,
             Err(e) => {
@@ -135,9 +133,16 @@ impl EventHandler for Handler {
         for re in &regexes.lock().await.regexvec {
             if re.is_match(&msg.content) {
                 msg.delete(&ctx.http).await.ok();
-                break;
+                return;
             }
         }
+
+        if msg.guild_id.unwrap() != env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
+            return;
+        };
+        db.increment_message_count(msg.author.id.as_u64())
+            .await
+            .ok();
     }
 
     async fn message_update(

@@ -1,60 +1,180 @@
-use serenity::builder::CreateEmbed;
-use serenity::model::channel::EmbedField;
+use serenity::builder::EditMessage;
 use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::interactions::message_component::{ActionRowComponent, ButtonStyle};
+use serenity::model::interactions::message_component::ButtonStyle;
 
-use crate::{
-    env, Channel, ChannelId, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
-};
+use crate::extensions::*;
+use crate::models::{CouncilVoting, SuspectMessageEdit, VotingAction};
+use crate::{env, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User};
 
-// Check whether the provided message is reported or not (if there is a report of the message on
-// the moderation channel)
-// If the message is reported: Returns Some(message)
-// else: Returns None
-async fn is_reported(ctx: &Context, message_id: u64, mod_id: u64) -> Option<Message> {
-    let mod_channel_id = ChannelId(mod_id);
-    let cur_id = ctx.cache.current_user_id().await;
-    let mut messages_after = mod_channel_id
-        .messages(&ctx.http, |r| r.after(MessageId(message_id)))
-        .await
-        .unwrap();
-    messages_after.retain(|m| {
-        m.author.id == cur_id
-            && !m.embeds.is_empty()
-            && m.embeds[0]
-                .fields
-                .iter()
-                .find(|f| f.name.starts_with("Viestin id"))
-                .unwrap()
-                .value
-                .parse::<u64>()
-                .unwrap()
-                == message_id
-    });
-    match messages_after.is_empty() {
-        true => None,
-        false => Some(messages_after[0].clone()),
-    }
+async fn is_reported(ctx: &Context, message_id: u64) -> bool {
+    let db = ctx.get_db().await;
+    db.is_reported(message_id).await.unwrap_or(false)
 }
 
-// This function add the NO_REPORTS_ROLE for the user provided
-async fn prevent_further_reports(ctx: &Context, user_id: u64) {
-    let no_reports_role_id: u64 = env::var("NO_REPORTS_ROLE_ID")
-        .expect("Expected NO_REPORTS_ROLE_ID in .env")
-        .parse()
-        .expect("Invalid NO_REPORTS_ROLE_ID provided");
+fn generate_moderation_message(
+    message: &mut EditMessage,
+    voting: CouncilVoting,
+    edits: Vec<SuspectMessageEdit>,
+    votes: Vec<VotingAction>,
+) {
+    let guild_id = env::var("GUILD_ID").expect("NO GUILD_ID in .env");
+    let message_link = format!(
+        "https://discord.com/channels/{}/{}/{}",
+        guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
+    );
+    let mut delete_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 0)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
+    if delete_voters.is_empty() {
+        delete_voters = "-".to_string()
+    }
+    let mut silence_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 1)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
+    if silence_voters.is_empty() {
+        silence_voters = "-".to_string()
+    }
+    let mut block_reporter_voters = votes
+        .iter()
+        .filter(|x| x.vote_type == 2)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
+    if block_reporter_voters.is_empty() {
+        block_reporter_voters = "-".to_string()
+    }
+    message.embed(|e| {
+        e.color(serenity::utils::Color::RED);
+        e.title("Viestistä on tehty ilmoitus!");
+        e.field("Arvojäseniä paikalla", voting.moderators_online, true);
+        e.field(
+            "Viestin kanava",
+            format!("<#{}>", voting.suspect_message_channel_id),
+            true,
+        );
+        e.field(
+            "Viestin lähettänyt",
+            format!("<@{}>", voting.suspect_id),
+            true,
+        );
+        e.field(
+            "Ilmoitusten tehnyt",
+            format!("<@{}>", voting.reporter_id),
+            true,
+        );
+        e.description(format!(
+            "Viestin sisältö:\n```\n{}```",
+            voting.suspect_message_content
+        ));
+        e.field(
+            format!(
+                "Poistamisen puolesta {}/{}",
+                voting.delete_votes, voting.delete_votes_required
+            ),
+            delete_voters,
+            true,
+        );
+        e.field(
+            format!(
+                "Hiljennyksen puolesta {}/{}",
+                voting.silence_votes, voting.silence_votes_required
+            ),
+            silence_voters,
+            true,
+        );
+        e.field(
+            format!(
+                "Ilmoittajan estämisen puolesta {}/{}",
+                voting.block_reporter_votes, voting.block_reporter_votes_required
+            ),
+            block_reporter_voters,
+            true,
+        );
+        e.footer(|f| {
+            f.text(format!(
+                "Viesti lähetetty: {}",
+                voting.suspect_message_send_time
+            ))
+        })
+    });
+    for edit in &edits {
+        if edit.new_content.is_empty() {
+            message.add_embed(|e| {
+                e.title("Viesti on poistettu");
+                e.footer(|f| f.text(format!("Poiston ajankohta: {}", edit.edit_time)))
+            });
+            break;
+        }
+        message.add_embed(|e| {
+            e.title("Viestiä on muokattu");
+            e.description(format!("Uusi sisältö:\n```\n{}```", edit.new_content));
+            e.footer(|f| f.text(format!("Muokkausajankohta: {}", edit.edit_time)))
+        });
+    }
+    message.components(|c| {
+        c.create_action_row(|r| {
+            r.create_button(|b| {
+                b.label("Poista viesti");
+                b.style(ButtonStyle::Secondary);
+                if voting.delete_votes == voting.delete_votes_required
+                    || (!edits.is_empty() && edits.last().unwrap().new_content.is_empty())
+                {
+                    b.disabled(true);
+                }
+                b.custom_id("delete_button")
+            });
+            r.create_button(|b| {
+                b.label("Hiljennä jäsen");
+                b.style(ButtonStyle::Danger);
+                if voting.silence_votes == voting.silence_votes_required {
+                    b.disabled(true);
+                }
+                b.custom_id("ban_button")
+            });
+            r.create_button(|b| {
+                b.label("Estä ilmoittaja");
+                b.style(ButtonStyle::Danger);
+                if voting.block_reporter_votes == voting.block_reporter_votes_required {
+                    b.disabled(true);
+                }
+                b.custom_id("abuse_button")
+            });
+            if !message_link.is_empty() {
+                r.create_button(|b| {
+                    b.label("Näytä viesti");
+                    b.style(ButtonStyle::Link);
+                    b.url(message_link)
+                });
+            }
+            r
+        })
+    });
+}
 
-    let guild_id: u64 = env::var("GUILD_ID")
-        .expect("Expected GUILD_ID in .env")
+async fn update_voting_message(ctx: &Context, voting_message_id: u64) {
+    let moderation_channel_id: u64 = env::var("MOD_CHANNEL_ID")
+        .expect("No MOD_CHANNEL_ID in .env")
         .parse()
-        .expect("Invalid GUILD_ID provided");
-
-    let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
-    member
-        .add_role(&ctx.http, no_reports_role_id)
+        .expect("Invalid MOD_CHANNEL_ID provided");
+    let db = ctx.get_db().await;
+    let event = db.get_voting_event(voting_message_id).await.unwrap();
+    let votes = db.get_voting_event_votes(voting_message_id).await.unwrap();
+    let edits = db.get_voting_event_edits(voting_message_id).await.unwrap();
+    let mut message = ctx
+        .http
+        .get_message(moderation_channel_id, voting_message_id)
         .await
         .unwrap();
-    info!("Added no-reports-role for {}", user_id);
+    message
+        .edit(&ctx.http, |m| {
+            generate_moderation_message(m, event, edits, votes);
+            m
+        })
+        .await
+        .unwrap()
 }
 
 // This handles a message_changed event an checks for
@@ -65,33 +185,15 @@ async fn prevent_further_reports(ctx: &Context, user_id: u64) {
 // longer be logged)
 // NOTE: This could become a problem in which case a workaround can be implemented
 pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
-    let moderation_channel_id = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod channel id");
-    let mut embed_message = match is_reported(ctx, event.id.0, moderation_channel_id).await {
-        None => return,
-        Some(m) => m,
-    };
-    embed_message
-        .edit(&ctx.http, |m| {
-            m.add_embed(|e| {
-                e.color(serenity::utils::Color::ORANGE);
-                e.title(format!(
-                    "Viestiä muokattu {}",
-                    event
-                        .edited_timestamp
-                        .unwrap()
-                        .with_timezone(&chrono::Local)
-                ));
-                e.description(format!(
-                    "Uusi sisältö:\n```\n{}```",
-                    event.content.as_ref().unwrap()
-                ))
-            })
-        })
+    if !is_reported(ctx, event.id.0).await {
+        return;
+    }
+    let db = ctx.get_db().await;
+    let voting_event = db.get_voting_event_for_message(event.id.0).await.unwrap();
+    db.add_edit_event(event.to_owned(), voting_event.vote_message_id)
         .await
         .unwrap();
+    update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
 // This handles the deletion of a message
@@ -99,44 +201,18 @@ pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
 // After that it proceeds accordingly.
 // If a reported message is deleted the deletion time will be logged into the embed-chain
 pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
-    let moderation_channel_id = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod channel id");
-    let mut embed_message = match is_reported(ctx, message_id.0, moderation_channel_id).await {
-        None => return,
-        Some(m) => m,
-    };
-    embed_message
-        .edit(&ctx.http, |m| {
-            m.add_embed(|e| {
-                e.color(serenity::utils::Color::RED);
-                e.title("Viesti poistettu");
-                e.description(format!("Poiston ajankohta {}", chrono::Local::now()))
-            });
-            m.components(|c| {
-                c.create_action_row(|r| {
-                    r.create_button(|b| {
-                        b.label("Poista viesti");
-                        b.style(ButtonStyle::Secondary);
-                        b.disabled(true);
-                        b.custom_id("delete_button")
-                    });
-                    r.create_button(|b| {
-                        b.label("Hiljennä jäsen");
-                        b.style(ButtonStyle::Danger);
-                        b.custom_id("ban_button")
-                    });
-                    r.create_button(|b| {
-                        b.label("Estä ilmoittaja");
-                        b.style(ButtonStyle::Danger);
-                        b.custom_id("abuse_button")
-                    })
-                })
-            })
-        })
-        .await
-        .unwrap();
+    if !is_reported(ctx, message_id.0).await {
+        return;
+    }
+    let db = ctx.get_db().await;
+    let voting_event = db.get_voting_event_for_message(message_id.0).await.unwrap();
+    db.message_deleted(
+        chrono::Local::now().naive_local(),
+        voting_event.vote_message_id,
+    )
+    .await
+    .unwrap();
+    update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
 // Handles an event where a message was reported using the "⛔ Ilmianna viesti" message command
@@ -191,10 +267,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .expect("MOD_CHANNEL_ID id expected")
         .parse::<u64>()
         .expect("Invalid mod role id");
-    if is_reported(ctx, suspect_message.id.0, moderation_channel_id)
-        .await
-        .is_some()
-    {
+    if is_reported(ctx, suspect_message.id.0).await {
         info!(
             "The message {} is already reported! Skipping...",
             suspect_message.id.0
@@ -204,85 +277,23 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     let mods_online = get_online_mod_count(ctx).await;
     let moderation_channel = ctx.http.get_channel(moderation_channel_id).await.unwrap();
     let suspect = suspect_message.author.clone();
-    moderation_channel
+    let voting_message = moderation_channel
         .id()
         .send_message(&ctx.http, |m| {
-            m.embed(|e| {
-                e.color(serenity::utils::Color::RED);
-                e.title(format!(
-                    "Käyttäjän {} viestistä on tehty ilmoitus!",
-                    suspect.tag()
-                ));
-                e.field("Arvojäseniä paikalla", mods_online, true);
-                e.field(
-                    "Viestin kanava",
-                    format!("<#{}>", suspect_message.channel_id.0),
-                    true,
-                );
-                e.field("Viestin id", suspect_message.id, true);
-                e.field("Käyttäjän id", suspect.id.0, true);
-                e.field(
-                    "Ilmoituksen tehnyt",
-                    interaction.member.clone().unwrap().user,
-                    true,
-                );
-                e.description(format!(
-                    "Viestin sisältö:\n```\n{}```",
-                    suspect_message.content
-                ));
-                e.field(
-                    format!(
-                        "Poistamisen puolesta 0/{}",
-                        (mods_online as f32).sqrt().clamp(1., 3.).round()
-                    ),
-                    "-",
-                    true,
-                );
-                e.field(
-                    format!(
-                        "Hiljennyksen puolesta 0/{}",
-                        (mods_online as f32).sqrt().round()
-                    ),
-                    "-",
-                    true,
-                );
-                e.field(
-                    format!(
-                        "Ilmoittajan estämisen puolesta 0/{}",
-                        (mods_online as f32).sqrt().clamp(1., 3.).round()
-                    ),
-                    "-",
-                    true,
-                );
-                e.footer(|f| {
-                    f.text(format!(
-                        "Viesti lähetetty: {}",
-                        suspect_message.timestamp.with_timezone(&chrono::Local)
-                    ))
-                })
-            });
-            m.components(|c| {
-                c.create_action_row(|r| {
-                    r.create_button(|b| {
-                        b.label("Poista viesti");
-                        b.style(ButtonStyle::Secondary);
-                        b.custom_id("delete_button")
-                    });
-                    r.create_button(|b| {
-                        b.label("Hiljennä jäsen");
-                        b.style(ButtonStyle::Danger);
-                        b.custom_id("ban_button")
-                    });
-                    r.create_button(|b| {
-                        b.label("Estä ilmoittaja");
-                        b.style(ButtonStyle::Danger);
-                        b.custom_id("abuse_button")
-                    })
-                })
-            })
+            m.embed(|e| e.title("Viestistä on tehty ilmoitus!"))
         })
         .await
         .unwrap();
+    let db = ctx.get_db().await;
+    db.new_reported_message(
+        voting_message.id.0,
+        suspect_message.to_owned(),
+        interaction.user.id.0,
+        mods_online as i32,
+    )
+    .await
+    .unwrap();
+    update_voting_message(ctx, voting_message.id.0).await;
     let message_link = suspect_message.link_ensured(&ctx.http).await;
     suspect
         .dm(&ctx.http, |m| {
@@ -325,111 +336,35 @@ async fn get_online_mod_count(ctx: &Context) -> usize {
 // and then acts accordingly, either by deleting the message and then updating
 // the announcement on the moderation channel or just by updating the announcement
 async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
-    // FIXME: Defeat the spaghettimonster
-    let mut original_embed = message.embeds.first().unwrap().clone();
-    if original_embed.title.as_ref().unwrap().contains("poistettu") {
+    let db = ctx.get_db().await;
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.delete_votes == event.delete_votes_required {
         return;
     }
-    let delete_field_index = original_embed
-        .fields
-        .iter()
-        .position(|f| f.name.starts_with("Poistamisen"))
-        .unwrap();
-    if original_embed.fields[delete_field_index]
-        .value
-        .contains(&voter.id.to_string())
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 0)
+        .await
+        .unwrap()
+        == 0
     {
         return;
     }
-    let name = &original_embed.fields[delete_field_index].name;
-    let mut current_count = name[name.rfind(' ').unwrap() + 1..name.rfind('/').unwrap()]
-        .parse::<i64>()
-        .unwrap();
-    let required_count = name[name.rfind('/').unwrap() + 1..name.len()]
-        .parse::<i64>()
-        .unwrap();
-    current_count += 1;
-    if current_count >= required_count {
-        let channel_mention = &original_embed
-            .fields
-            .iter()
-            .find(|f| f.name.starts_with("Viestin kanava"))
-            .unwrap()
-            .value;
-        let channel_id = channel_mention
-            [channel_mention.find('#').unwrap() + 1..channel_mention.rfind('>').unwrap()]
-            .parse::<u64>()
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.delete_votes == event.delete_votes_required {
+        let message = ctx
+            .http
+            .get_message(
+                event.suspect_message_channel_id as u64,
+                event.suspect_message_id as u64,
+            )
+            .await
             .unwrap();
-        let message_id = original_embed
-            .fields
-            .iter()
-            .find(|f| f.name.starts_with("Viestin id"))
-            .unwrap()
-            .value
-            .parse::<u64>()
+        message.delete(&ctx.http).await.unwrap();
+        db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
+            .await
             .unwrap();
-        original_embed.title = Some("Viesti on poistettu".to_string());
-        info!("Poistetaan viesti {} kanavalta {}", message_id, channel_id);
-        let sus_message = ctx.http.get_message(channel_id, message_id).await.unwrap();
-        sus_message.delete(&ctx.http).await.unwrap();
     }
-    let new_name = format!("Poistamisen puolesta {}/{}", current_count, required_count);
-    let new_value = match original_embed.fields[delete_field_index].value.as_ref() {
-        "-" => format!("{}", voter),
-        _ => format!(
-            "{}\n{}",
-            voter, &original_embed.fields[delete_field_index].value
-        ),
-    };
-    original_embed.fields[delete_field_index] = EmbedField::new(new_name, new_value, false);
-    let mut actionrow = message.components.clone();
-    if let ActionRowComponent::Button(button) = &mut actionrow[0].components[0] {
-        button.disabled = true;
-    }
-    let mut original_embeds = message.embeds.clone();
-    original_embeds[0] = original_embed.clone();
-    let mut original_embeds: Vec<CreateEmbed> = original_embeds
-        .iter()
-        .map(|e| CreateEmbed::from(e.to_owned()))
-        .collect();
-    if current_count >= required_count {
-        original_embeds[0].footer(|f| {
-            f.text(format!(
-                "{}\nPoistettu: {}",
-                original_embed.footer.clone().unwrap().text,
-                chrono::Local::now()
-            ))
-        });
-    }
-    message
-        .edit(&ctx.http, |m| {
-            m.set_embeds(original_embeds);
-            if current_count >= required_count {
-                m.components(|c| {
-                    c.create_action_row(|r| {
-                        r.create_button(|b| {
-                            b.label("Poista viesti");
-                            b.style(ButtonStyle::Secondary);
-                            b.disabled(true);
-                            b.custom_id("delete_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Hiljennä jäsen");
-                            b.style(ButtonStyle::Danger);
-                            b.custom_id("ban_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Estä ilmoittaja");
-                            b.style(ButtonStyle::Danger);
-                            b.custom_id("abuse_button")
-                        })
-                    })
-                });
-            }
-            m
-        })
-        .await
-        .unwrap();
+    update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
 // The function to handle a vote-addition event for the "ban_button"
@@ -439,213 +374,74 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
 //
 // NOTE: The ban actually only applies the "silenced" role upon the user
 async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
-    let mut original_embed = message.embeds.first().unwrap().clone();
-    if original_embed
-        .title
-        .as_ref()
+    let db = ctx.get_db().await;
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.silence_votes == event.silence_votes_required {
+        return;
+    }
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 1)
+        .await
         .unwrap()
-        .contains("hiljennetty")
+        == 0
     {
         return;
     }
-    let ban_field_index = original_embed
-        .fields
-        .iter()
-        .position(|f| f.name.starts_with("Hiljennyksen"))
-        .unwrap();
-    if original_embed.fields[ban_field_index]
-        .value
-        .contains(&voter.id.to_string())
-    {
-        return;
-    }
-    let name = &original_embed.fields[ban_field_index].name;
-    let mut current_count = name[name.rfind(' ').unwrap() + 1..name.rfind('/').unwrap()]
-        .parse::<i64>()
-        .unwrap();
-    let required_count = name[name.rfind('/').unwrap() + 1..name.len()]
-        .parse::<i64>()
-        .unwrap();
-    current_count += 1;
-    if current_count >= required_count {
-        let user_id = original_embed
-            .fields
-            .iter()
-            .find(|f| f.name.starts_with("Käyttäjän id"))
-            .unwrap()
-            .value
-            .parse::<u64>()
-            .unwrap();
-        let guild_id = env::var("GUILD_ID")
-            .expect("GUILD_ID expected")
-            .parse::<u64>()
-            .expect("Invalid guild id");
-        let silence_role_id: u64 = env::var("SILENCED_ROLE_ID")
-            .expect("SILENCED_ROLE_ID expected")
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.silence_votes == event.silence_votes_required {
+        let guild_id: u64 = env::var("GUILD_ID")
+            .expect("Expected GUILD_ID in .env")
+            .parse()
+            .expect("Invalid GUILD_ID provided");
+        let silence_role: u64 = env::var("SILENCE_ROLE_ID")
+            .expect("Expected SILENCED_ROLE_ID in .env")
             .parse()
             .expect("Invalid SILENCED_ROLE_ID provided");
-        let mut member = ctx.http.get_member(guild_id, user_id).await.unwrap();
-        info!("Hiljennetään käyttäjä {}", member.user);
-        member.add_role(&ctx.http, silence_role_id).await.unwrap();
-        original_embed.title = Some(format!("Käyttäjä {} on hiljennetty!", member.user.tag()));
+        let mut member = ctx
+            .http
+            .get_member(guild_id, event.suspect_id as u64)
+            .await
+            .unwrap();
+        member.add_role(&ctx.http, silence_role).await.unwrap();
     }
-    let new_name = format!("Hiljennyksen puolesta {}/{}", current_count, required_count);
-    let new_value = match original_embed.fields[ban_field_index].value.as_ref() {
-        "-" => format!("{}", voter),
-        _ => format!(
-            "{}\n{}",
-            voter, &original_embed.fields[ban_field_index].value
-        ),
-    };
-    original_embed.fields[ban_field_index] = EmbedField::new(new_name, new_value, false);
-    let mut actionrow = message.components.clone();
-    if let ActionRowComponent::Button(button) = &mut actionrow[0].components[0] {
-        button.disabled = true;
-    }
-    let mut original_embeds = message.embeds.clone();
-    original_embeds[0] = original_embed.clone();
-    let mut original_embeds: Vec<CreateEmbed> = original_embeds
-        .iter()
-        .map(|e| CreateEmbed::from(e.to_owned()))
-        .collect();
-    if current_count >= required_count {
-        original_embeds[0].footer(|f| {
-            f.text(format!(
-                "{}\nKäyttäjä hiljennetty: {}",
-                original_embed.footer.clone().unwrap().text,
-                chrono::Local::now()
-            ))
-        });
-    }
-    message
-        .edit(&ctx.http, |m| {
-            m.set_embeds(original_embeds);
-            if current_count >= required_count {
-                m.components(|c| {
-                    c.create_action_row(|r| {
-                        r.create_button(|b| {
-                            b.label("Poista viesti");
-                            b.style(ButtonStyle::Secondary);
-                            b.custom_id("delete_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Hiljennä jäsen");
-                            b.style(ButtonStyle::Danger);
-                            b.disabled(true);
-                            b.custom_id("ban_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Estä ilmoittaja");
-                            b.style(ButtonStyle::Danger);
-                            b.custom_id("abuse_button")
-                        })
-                    })
-                });
-            }
-            m
-        })
-        .await
-        .unwrap();
+    update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
 // This function handles the press off the "abuse_button"
 // If the vote-goal is reached, the user will be given a
 // role that prevents them from further abusing the reporting feature
 async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
-    let mut original_embed = message.embeds.first().unwrap().clone();
-    let abuse_field_index = original_embed
-        .fields
-        .iter()
-        .position(|f| f.name.starts_with("Ilmoittajan estämisen"))
-        .unwrap();
-    if original_embed.fields[abuse_field_index]
-        .value
-        .contains(&voter.id.to_string())
+    let db = ctx.get_db().await;
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.block_reporter_votes == event.block_reporter_votes_required {
+        return;
+    }
+    if db
+        .add_vote(event.vote_message_id, voter.id.0 as i64, 2)
+        .await
+        .unwrap()
+        == 0
     {
         return;
     }
-    let name = &original_embed.fields[abuse_field_index].name;
-    let mut current_count = name[name.rfind(' ').unwrap() + 1..name.rfind('/').unwrap()]
-        .parse::<i64>()
-        .unwrap();
-    let required_count = name[name.rfind('/').unwrap() + 1..name.len()]
-        .parse::<i64>()
-        .unwrap();
-    current_count += 1;
-    if current_count >= required_count {
-        let user_id_string = &original_embed
-            .fields
-            .iter()
-            .find(|f| f.name.starts_with("Ilmoituksen tehnyt"))
-            .unwrap()
-            .value;
-        let user_id: u64 = user_id_string
-            [user_id_string.find('@').unwrap() + 1..user_id_string.rfind('>').unwrap()]
+    let event = db.get_voting_event(message.id.0).await.unwrap();
+    if event.block_reporter_votes == event.block_reporter_votes_required {
+        let guild_id: u64 = env::var("GUILD_ID")
+            .expect("Expected GUILD_ID in .env")
             .parse()
+            .expect("Invalid GUILD_ID provided");
+        let abuse_role: u64 = env::var("NO_REPORTS_ROLE_ID")
+            .expect("Expected NO_REPORTS_ROLE_ID in .env")
+            .parse()
+            .expect("Invalid NO_REPORTS_ROLE_ID provided");
+        let mut member = ctx
+            .http
+            .get_member(guild_id, event.suspect_id as u64)
+            .await
             .unwrap();
-        original_embed.title = Some("Ilmoittaja on estetty!".to_string());
-        prevent_further_reports(ctx, user_id).await;
+        member.add_role(&ctx.http, abuse_role).await.unwrap();
     }
-    let new_name = format!(
-        "Ilmoittajan estämisen puolesta {}/{}",
-        current_count, required_count
-    );
-    let new_value = match original_embed.fields[abuse_field_index].value.as_ref() {
-        "-" => format!("{}", voter),
-        _ => format!(
-            "{}\n{}",
-            voter, &original_embed.fields[abuse_field_index].value
-        ),
-    };
-    original_embed.fields[abuse_field_index] = EmbedField::new(new_name, new_value, false);
-    let mut actionrow = message.components.clone();
-    if let ActionRowComponent::Button(button) = &mut actionrow[0].components[0] {
-        button.disabled = true;
-    }
-    let mut original_embeds = message.embeds.clone();
-    original_embeds[0] = original_embed.clone();
-    let mut original_embeds: Vec<CreateEmbed> = original_embeds
-        .iter()
-        .map(|e| CreateEmbed::from(e.to_owned()))
-        .collect();
-    if current_count >= required_count {
-        original_embeds[0].footer(|f| {
-            f.text(format!(
-                "{}\nIlmoittaja estetty: {}",
-                original_embed.footer.clone().unwrap().text,
-                chrono::Local::now()
-            ))
-        });
-    }
-    message
-        .edit(&ctx.http, |m| {
-            m.set_embeds(original_embeds);
-            if current_count >= required_count {
-                m.components(|c| {
-                    c.create_action_row(|r| {
-                        r.create_button(|b| {
-                            b.label("Poista viesti");
-                            b.style(ButtonStyle::Secondary);
-                            b.custom_id("delete_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Hiljennä jäsen");
-                            b.style(ButtonStyle::Danger);
-                            b.custom_id("ban_button")
-                        });
-                        r.create_button(|b| {
-                            b.label("Estä ilmoittaja");
-                            b.disabled(true);
-                            b.style(ButtonStyle::Danger);
-                            b.custom_id("abuse_button")
-                        })
-                    })
-                });
-            }
-            m
-        })
-        .await
-        .unwrap();
+    update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
 // This function handles the vote-interactions and the report interaction and
