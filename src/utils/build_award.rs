@@ -19,8 +19,9 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
     let mask = mask.to_rgba8();
 
     for (x, y, pixel) in pfp.enumerate_pixels_mut() {
-        if mask.get_pixel(x, y)[3] < 150 {
-            *pixel = *mask.get_pixel(x, y);
+        let mask_pixel = mask.get_pixel(x, y);
+        if mask_pixel[3] < 150 {
+            *pixel = *mask_pixel;
         }
     }
 
