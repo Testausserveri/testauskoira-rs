@@ -15,11 +15,11 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
     let mask = image::io::Reader::open("img/blackcomposite.png").unwrap()
         .decode().unwrap();
 
-    let mut pfp = pfp.to_rgba16();
-    let mask = mask.to_rgba16();
+    let mut pfp = pfp.to_rgba8();
+    let mask = mask.to_rgba8();
 
     for (x, y, pixel) in pfp.enumerate_pixels_mut() {
-        if mask.get_pixel(x, y)[3] == 0 {
+        if mask.get_pixel(x, y)[3] < 150 {
             *pixel = *mask.get_pixel(x, y);
         }
     }
