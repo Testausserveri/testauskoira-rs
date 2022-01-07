@@ -255,13 +255,20 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .unwrap();
         return;
     }
+
+    let message = if is_moderator(&ctx, &interaction.user).await {
+        format!("Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>", moderation_channel_id)
+    } else {
+        "Viesti on ilmiannettu arvojäsenten neuvostolle".to_string()
+    };
+
     interaction
         .create_interaction_response(&ctx.http, |r| {
             r.interaction_response_data(|d| {
                 d.flags(
                     serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
                     );
-                d.content(format!("Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>", moderation_channel_id))
+                d.content(message)
             });
             r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
         })
@@ -330,6 +337,20 @@ async fn get_online_mod_count(ctx: &Context) -> usize {
     let mut members = channel.members(&ctx.cache).await.unwrap();
     members.retain(|m| precenses.contains_key(&m.user.id) && !m.user.bot);
     members.len()
+}
+
+// Check if the given user is a moderator or not, based on their access to the moderation channel
+async fn is_moderator(ctx: &Context, user: &User) -> bool {
+    let channelid = env::var("MOD_CHANNEL_ID")
+        .expect("MOD_CHANNEL_ID id expected")
+        .parse::<u64>()
+        .expect("Invalid mod role id");
+    let channel = ctx.http.get_channel(channelid).await.unwrap();
+    let channel = match channel {
+        Channel::Guild(c) => c,
+        _ => unreachable!(),
+    };
+    channel.permissions_for_user(&ctx.cache, user).await.unwrap().read_messages()
 }
 
 // The function to handle a vote-addition event for the "delete_button"
