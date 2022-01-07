@@ -14,8 +14,10 @@ services:
 
   testauskoira_mariadb:
     container_name: testauskoira_mariadb
+    image: mariadb
+    volumes:
+      - ./mariadb:/var/lib/mysql
     environment:
       - "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=true"
-    image: mariadb
     restart: "unless-stopped"
 
