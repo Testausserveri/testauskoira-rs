@@ -56,7 +56,7 @@ fn generate_moderation_message(
             true,
         );
         e.field(
-            "Viestin lähettäny",
+            "Viestin lähettänyt",
             format!("<@{}>", voting.suspect_id),
             true,
         );
