@@ -229,6 +229,11 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .parse()
         .expect("Invalid GUILD_ID provided");
 
+    let moderation_channel_id = env::var("MOD_CHANNEL_ID")
+        .expect("MOD_CHANNEL_ID id expected")
+        .parse::<u64>()
+        .expect("Invalid MOD_CHANNEL_ID provided");
+
     if interaction
         .user
         .has_role(&ctx.http, guild_id, no_reports_role_id)
@@ -256,17 +261,13 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
                 d.flags(
                     serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
                     );
-                d.content("Viesti on ilmiannettu arvojäsenten neuvostolle")
+                d.content(format!("Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>", moderation_channel_id))
             });
             r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
         })
         .await
         .unwrap();
     let suspect_message = interaction.data.resolved.messages.values().next().unwrap();
-    let moderation_channel_id = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod role id");
     if is_reported(ctx, suspect_message.id.0).await {
         info!(
             "The message {} is already reported! Skipping...",
