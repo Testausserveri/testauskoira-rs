@@ -6,7 +6,7 @@ pub async fn github(ctx: &Context, interaction: ApplicationCommandInteraction) {
         .create_interaction_response(&ctx.http, |r| {
             r.interaction_response_data(|d| {
                 d.content(
-                    "Linkki github organisaatioon:\n<https://koira.testausserveri.fi/github/join>",
+                    "Linkki github organisaatioon:\n<https://api.testausserveri.fi/v1/github/authorize>",
                 )
             })
         })
