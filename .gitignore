@@ -1,3 +1,4 @@
 /target
 .env
 .sqlx-data.json
+/mariadb
