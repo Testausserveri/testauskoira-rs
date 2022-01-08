@@ -1,11 +1,10 @@
-use serenity::framework::standard::macros::command;
-use serenity::framework::standard::CommandResult;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use serenity::{
+    framework::standard::{macros::command, CommandResult},
+    model::prelude::*,
+    prelude::*,
+};
 
-use crate::extensions::*;
-use crate::utils::winner_showcase::display_winner;
-use crate::ShardManagerContainer;
+use crate::{extensions::*, utils::winner_showcase::display_winner, ShardManagerContainer};
 
 #[command]
 #[owners_only]

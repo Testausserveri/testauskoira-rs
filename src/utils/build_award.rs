@@ -9,11 +9,15 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
         .await
         .unwrap();
 
-    let pfp = image::io::Reader::new(Cursor::new(profile_picture)).
-        with_guessed_format().unwrap()
-        .decode().unwrap();
-    let mask = image::io::Reader::open("img/blackcomposite.png").unwrap()
-        .decode().unwrap();
+    let pfp = image::io::Reader::new(Cursor::new(profile_picture))
+        .with_guessed_format()
+        .unwrap()
+        .decode()
+        .unwrap();
+    let mask = image::io::Reader::open("img/blackcomposite.png")
+        .unwrap()
+        .decode()
+        .unwrap();
 
     let mut pfp = pfp.to_rgba8();
     let mask = mask.to_rgba8();

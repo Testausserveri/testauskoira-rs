@@ -1,8 +1,6 @@
-use std::env;
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
-use serenity::http::client::Http;
-use serenity::model::id::ChannelId;
+use serenity::{http::client::Http, model::id::ChannelId};
 use tracing::error;
 
 use crate::database::Database;

@@ -1,14 +1,36 @@
-use serenity::builder::EditMessage;
-use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::interactions::message_component::ButtonStyle;
+// FIXME: un-unwrap();
 
-use crate::extensions::*;
-use crate::models::{CouncilVoting, SuspectMessageEdit, VotingAction};
-use crate::{env, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User};
+use serenity::{
+    builder::EditMessage,
+    model::interactions::{
+        application_command::ApplicationCommandInteraction,
+        message_component::ButtonStyle,
+        InteractionApplicationCommandCallbackDataFlags,
+        InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
+    },
+};
+
+use crate::{
+    env,
+    extensions::*,
+    models::{CouncilVoting, SuspectMessageEdit, VotingAction},
+    Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
+};
 
 async fn is_reported(ctx: &Context, message_id: u64) -> bool {
     let db = ctx.get_db().await;
     db.is_reported(message_id).await.unwrap_or(false)
+}
+
+fn filter_votes(id: i32, actions: Vec<VotingAction>) -> String {
+    let mut actions = actions.iter()
+        .filter(|x| x.vote_type == id)
+        .map(|x| format!("\n<@{}>", x.voter_user_id))
+        .collect::<String>();
+    if actions.is_empty() {
+        actions = "-".to_string()
+    }
+    actions
 }
 
 fn generate_moderation_message(
@@ -22,30 +44,9 @@ fn generate_moderation_message(
         "https://discord.com/channels/{}/{}/{}",
         guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
     );
-    let mut delete_voters = votes
-        .iter()
-        .filter(|x| x.vote_type == 0)
-        .map(|x| format!("\n<@{}>", x.voter_user_id))
-        .collect::<String>();
-    if delete_voters.is_empty() {
-        delete_voters = "-".to_string()
-    }
-    let mut silence_voters = votes
-        .iter()
-        .filter(|x| x.vote_type == 1)
-        .map(|x| format!("\n<@{}>", x.voter_user_id))
-        .collect::<String>();
-    if silence_voters.is_empty() {
-        silence_voters = "-".to_string()
-    }
-    let mut block_reporter_voters = votes
-        .iter()
-        .filter(|x| x.vote_type == 2)
-        .map(|x| format!("\n<@{}>", x.voter_user_id))
-        .collect::<String>();
-    if block_reporter_voters.is_empty() {
-        block_reporter_voters = "-".to_string()
-    }
+    let delete_voters = filter_votes(0,votes.clone());
+    let silence_voters = filter_votes(1,votes.clone());
+    let block_reporter_voters = filter_votes(2,votes.clone());
     message.embed(|e| {
         e.color(serenity::utils::Color::RED);
         e.title("Viestistä on tehty ilmoitus!");
@@ -245,11 +246,11 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
             .create_interaction_response(&ctx.http, |r| {
                 r.interaction_response_data(|d| {
                     d.flags(
-                        serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
+                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
                         );
                     d.content("Sinut on hyllytetty ilmoitus-ominaisuuden väärinkäytöstä :rage:! Ilmoitustasi ei lähetetty.")
                 });
-                r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
+                r.kind(ChannelMessageWithSource)
             })
         .await
         .unwrap();
@@ -257,7 +258,10 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     }
 
     let message = if is_moderator(&ctx, &interaction.user).await {
-        format!("Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>", moderation_channel_id)
+        format!(
+            "Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>",
+            moderation_channel_id
+        )
     } else {
         "Viesti on ilmiannettu arvojäsenten neuvostolle".to_string()
     };
@@ -265,12 +269,10 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     interaction
         .create_interaction_response(&ctx.http, |r| {
             r.interaction_response_data(|d| {
-                d.flags(
-                    serenity::model::interactions::InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
-                    );
+                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
                 d.content(message)
             });
-            r.kind(serenity::model::interactions::InteractionResponseType::ChannelMessageWithSource)
+            r.kind(ChannelMessageWithSource)
         })
         .await
         .unwrap();
@@ -328,15 +330,13 @@ async fn get_online_mod_count(ctx: &Context) -> usize {
         .expect("MOD_CHANNEL_ID id expected")
         .parse::<u64>()
         .expect("Invalid mod role id");
-    let channel = ctx.http.get_channel(channelid).await.unwrap();
-    let channel = match channel {
-        Channel::Guild(c) => c,
-        _ => unreachable!(),
+    if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
+        let precenses = ctx.cache.guild(channel.guild_id).await.unwrap().presences;
+        let mut members = channel.members(&ctx.cache).await.unwrap();
+        members.retain(|m| precenses.contains_key(&m.user.id) && !m.user.bot);
+        return members.len();
     };
-    let precenses = ctx.cache.guild(channel.guild_id).await.unwrap().presences;
-    let mut members = channel.members(&ctx.cache).await.unwrap();
-    members.retain(|m| precenses.contains_key(&m.user.id) && !m.user.bot);
-    members.len()
+    unreachable!()
 }
 
 // Check if the given user is a moderator or not, based on their access to the moderation channel
@@ -345,12 +345,14 @@ async fn is_moderator(ctx: &Context, user: &User) -> bool {
         .expect("MOD_CHANNEL_ID id expected")
         .parse::<u64>()
         .expect("Invalid mod role id");
-    let channel = ctx.http.get_channel(channelid).await.unwrap();
-    let channel = match channel {
-        Channel::Guild(c) => c,
-        _ => unreachable!(),
-    };
-    channel.permissions_for_user(&ctx.cache, user).await.unwrap().read_messages()
+    if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
+        return channel
+            .permissions_for_user(&ctx.cache, user)
+            .await
+            .unwrap()
+            .read_messages();
+    }
+    unreachable!();
 }
 
 // The function to handle a vote-addition event for the "delete_button"
@@ -395,7 +397,7 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
 // the announcement on the moderation channel or just by updating the announcement
 //
 // NOTE: The ban actually only applies the "silenced" role upon the user
-async fn add_ban_vote(ctx: &Context, voter: User, message: &mut Message) {
+async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
     if event.silence_votes == event.silence_votes_required {
@@ -477,7 +479,7 @@ pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
             }
             "ban_button" => {
                 info!("Ban vote by {}", component.user.tag());
-                add_ban_vote(&ctx, component.user.clone(), &mut component.message).await;
+                add_silence_vote(&ctx, component.user.clone(), &mut component.message).await;
             }
             "abuse_button" => {
                 info!("Abuse vote by {}", component.user.tag());
@@ -488,9 +490,7 @@ pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
         component
             .create_interaction_response(&ctx.http, |r| {
                 r.interaction_response_data(|d| d.content("Ilmiannettu"));
-                r.kind(
-                    serenity::model::interactions::InteractionResponseType::DeferredUpdateMessage,
-                )
+                r.kind(DeferredUpdateMessage)
             })
             .await
             .unwrap();
