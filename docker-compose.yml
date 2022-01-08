@@ -11,6 +11,8 @@ services:
     volumes:
       - .env:/app/.env
       - ./img:/app/img
+      - ./blacklist.txt:/app/blacklist.txt
+      - ./award_id_blacklist.txt:/app/award_id_blacklist.txt
 
   testauskoira_mariadb:
     container_name: testauskoira_mariadb
