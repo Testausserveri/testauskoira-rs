@@ -17,7 +17,7 @@ default-features = false
 features = ["cache", "client", "gateway","standard_framework", "rustls_backend", "model","framework", "unstable_discord_api"]
 
 [dependencies.tokio]
-version = "1.13"
+version = "1.15"
 features = ["macros", "rt-multi-thread","signal"]
 
 [dependencies.diesel]
