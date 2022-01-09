@@ -1,3 +1,6 @@
+// FIXME: There's a built-in way in diesel to do this
+#![allow(non_snake_case)]
+
 table! {
     CouncilVotings (id) {
         id -> Integer,
