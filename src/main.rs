@@ -138,12 +138,13 @@ impl EventHandler for Handler {
             }
         }
 
-        if msg.guild_id.unwrap() != env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
-            return;
-        };
-        db.increment_message_count(msg.author.id.as_u64())
-            .await
-            .ok();
+        if let Some(gid) = msg.guild_id {
+            if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
+                db.increment_message_count(msg.author.id.as_u64())
+                    .await
+                    .ok();
+            };
+        }
     }
 
     async fn message_update(
