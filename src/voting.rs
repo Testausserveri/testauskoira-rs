@@ -417,7 +417,7 @@ async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
             .expect("Expected GUILD_ID in .env")
             .parse()
             .expect("Invalid GUILD_ID provided");
-        let silence_role: u64 = env::var("SILENCE_ROLE_ID")
+        let silence_role: u64 = env::var("SILENCED_ROLE_ID")
             .expect("Expected SILENCED_ROLE_ID in .env")
             .parse()
             .expect("Invalid SILENCED_ROLE_ID provided");
