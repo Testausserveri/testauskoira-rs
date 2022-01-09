@@ -366,7 +366,7 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
         return;
     }
     if db
-        .add_vote(event.vote_message_id, voter.id.0 as i64, 0)
+        .add_vote(event.vote_message_id, voter.id.0, 0)
         .await
         .unwrap()
         == 0
@@ -404,7 +404,7 @@ async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
         return;
     }
     if db
-        .add_vote(event.vote_message_id, voter.id.0 as i64, 1)
+        .add_vote(event.vote_message_id, voter.id.0, 1)
         .await
         .unwrap()
         == 0
@@ -441,7 +441,7 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
         return;
     }
     if db
-        .add_vote(event.vote_message_id, voter.id.0 as i64, 2)
+        .add_vote(event.vote_message_id, voter.id.0, 2)
         .await
         .unwrap()
         == 0

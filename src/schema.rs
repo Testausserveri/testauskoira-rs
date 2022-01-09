@@ -1,14 +1,13 @@
-#![allow(non_snake_case)]
 table! {
     CouncilVotings (id) {
         id -> Integer,
-        vote_message_id -> Bigint,
-        suspect_id -> Bigint,
-        suspect_message_id -> Bigint,
-        suspect_message_channel_id -> Bigint,
+        vote_message_id -> Unsigned<Bigint>,
+        suspect_id -> Unsigned<Bigint>,
+        suspect_message_id -> Unsigned<Bigint>,
+        suspect_message_channel_id -> Unsigned<Bigint>,
         suspect_message_send_time -> Datetime,
         suspect_message_content -> Text,
-        reporter_id -> Bigint,
+        reporter_id -> Unsigned<Bigint>,
         delete_votes -> Integer,
         delete_votes_required -> Integer,
         silence_votes -> Integer,
@@ -22,8 +21,8 @@ table! {
 table! {
     SuspectMessageEdits (id) {
         id -> Integer,
-        voting_message_id -> Bigint,
-        suspect_message_id -> Bigint,
+        voting_message_id -> Unsigned<Bigint>,
+        suspect_message_id -> Unsigned<Bigint>,
         new_content -> Text,
         edit_time -> Datetime,
     }
@@ -33,8 +32,8 @@ table! {
     VotingActions (id) {
         id -> Integer,
         vote_type -> Integer,
-        voter_user_id -> Bigint,
-        voting_message_id -> Bigint,
+        voter_user_id -> Unsigned<Bigint>,
+        voting_message_id -> Unsigned<Bigint>,
     }
 }
 
