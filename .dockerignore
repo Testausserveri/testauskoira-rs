@@ -5,3 +5,4 @@
 !migrations
 !entrypoint.sh
 !award_id_blacklist.txt
+!blacklist.txt
