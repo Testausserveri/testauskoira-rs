@@ -1,5 +1,5 @@
 use serenity::{
-    framework::standard::{macros::command, CommandResult},
+    framework::standard::{macros::command, Args, CommandResult},
     model::prelude::*,
     prelude::*,
 };
@@ -24,8 +24,12 @@ async fn quit(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[owners_only]
-async fn award_ceremony(ctx: &Context, _msg: &Message) -> CommandResult {
+async fn award_ceremony(ctx: &Context, _msg: &Message, mut args: Args) -> CommandResult {
+    let offset = match args.single::<i32>() {
+        Ok(a) => a,
+        _ => 0,
+    };
     let db = ctx.get_db().await;
-    display_winner(ctx.http.to_owned(), db.to_owned()).await;
+    display_winner(ctx.http.to_owned(), db.to_owned(), offset).await;
     Ok(())
 }

@@ -23,7 +23,8 @@ async fn is_reported(ctx: &Context, message_id: u64) -> bool {
 }
 
 fn filter_votes(id: i32, actions: Vec<VotingAction>) -> String {
-    let mut actions = actions.iter()
+    let mut actions = actions
+        .iter()
         .filter(|x| x.vote_type == id)
         .map(|x| format!("\n<@{}>", x.voter_user_id))
         .collect::<String>();
@@ -44,9 +45,9 @@ fn generate_moderation_message(
         "https://discord.com/channels/{}/{}/{}",
         guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
     );
-    let delete_voters = filter_votes(0,votes.clone());
-    let silence_voters = filter_votes(1,votes.clone());
-    let block_reporter_voters = filter_votes(2,votes.clone());
+    let delete_voters = filter_votes(0, votes.clone());
+    let silence_voters = filter_votes(1, votes.clone());
+    let block_reporter_voters = filter_votes(2, votes.clone());
     message.embed(|e| {
         e.color(serenity::utils::Color::RED);
         e.title("Viestistä on tehty ilmoitus!");

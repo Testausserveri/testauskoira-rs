@@ -5,7 +5,7 @@ use tracing::error;
 
 use crate::database::Database;
 
-async fn give_award_role(http: &Http, db: Database, winner: u64) {
+async fn give_award_role(http: &Http, db: Database, winner: u64, offset: i32) {
     let award_role_id: u64 = env::var("AWARD_ROLE_ID")
         .expect("No AWARD_ROLE_ID in .env")
         .parse()
@@ -18,7 +18,7 @@ async fn give_award_role(http: &Http, db: Database, winner: u64) {
 
     let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
     winner_member.add_role(http, award_role_id).await.unwrap();
-    let yesterdays_competition = db.get_most_active(1, 1).await.unwrap();
+    let yesterdays_competition = db.get_most_active(1, offset + 1).await.unwrap();
     if yesterdays_competition.is_empty() {
         return;
     }
@@ -38,8 +38,8 @@ async fn give_award_role(http: &Http, db: Database, winner: u64) {
     }
 }
 
-pub async fn display_winner(http: Arc<Http>, db: Database) {
-    let winners = db.get_most_active(5, 0).await.unwrap();
+pub async fn display_winner(http: Arc<Http>, db: Database, offset: i32) {
+    let winners = db.get_most_active(5, offset).await.unwrap();
     let total_msgs = db.get_total_daily_messages().await.unwrap();
 
     let channel = ChannelId::from(
@@ -77,7 +77,13 @@ pub async fn display_winner(http: Arc<Http>, db: Database) {
         .await
         .unwrap();
 
-    give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
+    give_award_role(
+        &http,
+        db.clone(),
+        winners[0].0.as_ref().unwrap().user.id.0,
+        offset,
+    )
+    .await;
 
     channel
         .send_message(http.clone(), |m| {

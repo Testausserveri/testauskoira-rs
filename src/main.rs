@@ -276,7 +276,7 @@ async fn main() {
     let http = client.cache_and_http.http.clone();
 
     scheduler.every(1.day()).at("00:00").run(move || {
-        runtime.block_on(display_winner(http.to_owned(), db.to_owned()));
+        runtime.block_on(display_winner(http.to_owned(), db.to_owned(), 1));
     });
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
