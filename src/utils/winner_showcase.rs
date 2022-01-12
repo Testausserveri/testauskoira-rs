@@ -40,7 +40,7 @@ async fn give_award_role(http: &Http, db: Database, winner: u64, offset: i32) {
 
 pub async fn display_winner(http: Arc<Http>, db: Database, offset: i32) {
     let winners = db.get_most_active(5, offset).await.unwrap();
-    let total_msgs = db.get_total_daily_messages().await.unwrap();
+    let total_msgs = db.get_total_daily_messages(offset).await.unwrap();
 
     let channel = ChannelId::from(
         env::var("AWARD_CHANNEL_ID")

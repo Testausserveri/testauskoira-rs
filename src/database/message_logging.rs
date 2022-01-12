@@ -32,8 +32,8 @@ impl Database {
             }
         })
     }
-    pub async fn get_total_daily_messages(&self) -> Result<i64, anyhow::Error> {
-        let curdate = chrono::Local::today().naive_local();
+    pub async fn get_total_daily_messages(&self, offset: i32) -> Result<i64, anyhow::Error> {
+        let curdate = chrono::Local::today().naive_local() - chrono::Duration::days(offset.into());
         use crate::schema::messages_day_stat::dsl::*;
 
         let value = messages_day_stat
