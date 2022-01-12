@@ -46,3 +46,15 @@ Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://d
 * Presence Intent
 * Server Members Intent
 
+### Automaattinen julkaiseminen
+
+Repository on konfiguroitu automaattisesti julkaisemaan itsensä halutulle palvelimelle. Palvelin pitää tosin valmistella ensiksi kloonaamalla tämä repository sinne ja asettamalla tiedoston `.env`-arvot. Kun joku puskee uuden muutoksen myöhemmin `main`-haaraan ohjelma rakennetaan Githubin palvelimella, pusketaan heidän dockerkuva-arkistoon, ladataan arkistosta tuotantopalvelimelle ja käynnistetään. 
+
+Automaattisen julkaisemisen toimiminen vaatii seuraavien salaisten arvojen asettaminen repositoryn (tapahtuu osoitteessa: https://github.com/<user>/<repository>/settings/secrets/actions). Arvojen tulee olla:
+
+| Avain | Arvo |
+| --- | ----- |
+| SSH_DIR | Hakemisto, jossa kloonattu repo sijaitsee. Esim `/home/testauskoira/testauskoira-rs`   |
+| SSH_IP | Tämän tulee olla IP-osoite tai palvelin, jolle halutaan julkaista ohjelma. |
+| SSH_PRIVATE_KEY | **Yksityinen** SSH-avain, jolla voi tunnistautua palvelimelle. |
+| SSH_USER | Käyttäjänimi, jolla yritetään kirjautua SSH:n yli. |
