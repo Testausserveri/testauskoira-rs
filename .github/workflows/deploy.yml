@@ -49,13 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Deploy to server
-      uses: appleboy/ssh-action@master
+      uses: fifsky/ssh-action@master
       with:
         host: ${{ secrets.SSH_IP }}
-        username: ${{ secrets.SSH_USER }}
+        user: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
+        command: |
           cd ${{ secrets.SSH_DIR }}
           git pull
           docker-compose up -d --build
