@@ -1,5 +1,6 @@
-use serenity::model::prelude::application_command::ApplicationCommandInteraction;
-use serenity::prelude::Context;
+use serenity::{
+    model::prelude::application_command::ApplicationCommandInteraction, prelude::Context,
+};
 
 pub async fn github(ctx: &Context, interaction: ApplicationCommandInteraction) {
     interaction

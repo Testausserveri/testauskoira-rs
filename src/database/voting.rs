@@ -12,15 +12,14 @@ impl Database {
         reporterid: u64,
         mods_online: i32,
     ) -> Result<usize, anyhow::Error> {
-        let messageidi64 = message.id.0 as i64;
         let new_voting = NewCouncilVoting {
-            vote_message_id: voting_message_id as i64,
-            suspect_id: message.author.id.0 as i64,
-            suspect_message_id: messageidi64,
-            suspect_message_channel_id: message.channel_id.0 as i64,
+            vote_message_id: voting_message_id,
+            suspect_id: message.author.id.0,
+            suspect_message_id: message.id.0,
+            suspect_message_channel_id: message.channel_id.0,
             suspect_message_send_time: message.timestamp.naive_local(),
             suspect_message_content: message.content,
-            reporter_id: reporterid as i64,
+            reporter_id: reporterid,
             delete_votes: 0,
             delete_votes_required: (mods_online as f32).sqrt().clamp(1., 3.).round() as i32,
             silence_votes: 0,
@@ -41,8 +40,8 @@ impl Database {
     ) -> Result<usize, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(diesel::update(crate::schema::CouncilVotings::table)
-            .filter(suspect_message_id.eq(suspect_message as i64))
-            .set(vote_message_id.eq(voting_message as i64))
+            .filter(suspect_message_id.eq(suspect_message))
+            .set(vote_message_id.eq(voting_message))
             .execute(&self.pool.get()?)?)
     }
 
@@ -52,7 +51,7 @@ impl Database {
     ) -> Result<CouncilVoting, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(CouncilVotings
-            .filter(vote_message_id.eq(voting_message_id as i64))
+            .filter(vote_message_id.eq(voting_message_id))
             .first::<CouncilVoting>(&self.pool.get()?)?)
     }
 
@@ -62,7 +61,7 @@ impl Database {
     ) -> Result<Vec<VotingAction>, anyhow::Error> {
         use crate::schema::VotingActions::dsl::*;
         Ok(VotingActions
-            .filter(voting_message_id.eq(voting_messageid as i64))
+            .filter(voting_message_id.eq(voting_messageid))
             .load::<VotingAction>(&self.pool.get()?)?)
     }
 
@@ -72,7 +71,7 @@ impl Database {
     ) -> Result<Vec<SuspectMessageEdit>, anyhow::Error> {
         use crate::schema::SuspectMessageEdits::dsl::*;
         Ok(SuspectMessageEdits
-            .filter(voting_message_id.eq(voting_messageid as i64))
+            .filter(voting_message_id.eq(voting_messageid))
             .order_by(edit_time)
             .load::<SuspectMessageEdit>(&self.pool.get()?)?)
     }
@@ -81,7 +80,7 @@ impl Database {
         use crate::schema::CouncilVotings::dsl::*;
         // FIXME: Very Q&D
         Ok(!CouncilVotings
-            .filter(suspect_message_id.eq(message_id as i64))
+            .filter(suspect_message_id.eq(message_id))
             .load::<CouncilVoting>(&self.pool.get()?)?
             .is_empty())
     }
@@ -92,18 +91,18 @@ impl Database {
     ) -> Result<CouncilVoting, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(CouncilVotings
-            .filter(suspect_message_id.eq(message_id as i64))
+            .filter(suspect_message_id.eq(message_id))
             .first::<CouncilVoting>(&self.pool.get()?)?)
     }
 
     pub async fn add_edit_event(
         &self,
         update_event: serenity::model::event::MessageUpdateEvent,
-        voting_message_id: i64,
+        voting_message_id: u64,
     ) -> Result<usize, anyhow::Error> {
         let new_edit = NewSuspectMessageEdit {
             voting_message_id,
-            suspect_message_id: update_event.id.0 as i64,
+            suspect_message_id: update_event.id.0,
             new_content: update_event.content.unwrap_or_default(),
             edit_time: update_event.edited_timestamp.unwrap().naive_local(),
         };
@@ -117,7 +116,7 @@ impl Database {
     pub async fn message_deleted(
         &self,
         delete_time: chrono::NaiveDateTime,
-        voting_id: i64,
+        voting_id: u64,
     ) -> Result<usize, anyhow::Error> {
         let delete = NewSuspectMessageEdit {
             voting_message_id: voting_id,
@@ -135,8 +134,8 @@ impl Database {
 
     pub async fn add_vote(
         &self,
-        voting_message_id: i64,
-        voter_user_id: i64,
+        voting_message_id: u64,
+        voter_user_id: u64,
         vote_type: i32,
     ) -> Result<usize, anyhow::Error> {
         let vote = NewVotingAction {

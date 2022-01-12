@@ -11,23 +11,24 @@ extern crate tracing;
 #[macro_use]
 extern crate diesel;
 
-use std::collections::HashSet;
-use std::env;
-use std::sync::Arc;
+use std::{collections::HashSet, env, sync::Arc};
 
 use clokwerk::{Scheduler, TimeUnits};
 use commands::owner::*;
 use database::Database;
 use extensions::*;
-use serenity::async_trait;
-use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
-use serenity::framework::standard::macros::group;
-use serenity::framework::StandardFramework;
-use serenity::http::Http;
-use serenity::model::event::{MessageUpdateEvent, ResumedEvent};
-use serenity::model::gateway::Ready;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use serenity::{
+    async_trait,
+    client::bridge::gateway::{GatewayIntents, ShardManager},
+    framework::{standard::macros::group, StandardFramework},
+    http::Http,
+    model::{
+        event::{MessageUpdateEvent, ResumedEvent},
+        gateway::Ready,
+        prelude::*,
+    },
+    prelude::*,
+};
 use utils::winner_showcase::*;
 
 pub struct ShardManagerContainer;
@@ -137,12 +138,13 @@ impl EventHandler for Handler {
             }
         }
 
-        if msg.guild_id.unwrap() != env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
-            return;
-        };
-        db.increment_message_count(msg.author.id.as_u64())
-            .await
-            .ok();
+        if let Some(gid) = msg.guild_id {
+            if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
+                db.increment_message_count(msg.author.id.as_u64())
+                    .await
+                    .ok();
+            };
+        }
     }
 
     async fn message_update(
@@ -273,11 +275,11 @@ async fn main() {
     let db = client.get_db().await;
     let http = client.cache_and_http.http.clone();
 
-    scheduler.every(1.day()).at("23:59").run(move || {
-        runtime.block_on(display_winner(http.to_owned(), db.to_owned()));
+    scheduler.every(1.day()).at("00:00").run(move || {
+        runtime.block_on(display_winner(http.to_owned(), db.to_owned(), 1));
     });
 
-    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(5000));
+    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
