@@ -297,6 +297,9 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 .map_or(DEFAULT_PRIZE.to_string(), |x| {
                     x.to_string().unwrap_or(DEFAULT_PRIZE.to_string())
                 });
+            let mention = sub_options
+                .by_name("mention")
+                .map(|x| x.to_role()).unwrap_or(None);
 
             if winners < 1 || duration < 1 {
                 interaction
@@ -316,7 +319,9 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 let mut message = channel
                     .id
                     .send_message(&ctx.http, |c| {
-                        c.content("@everyone");
+                        if let Some(m) = mention {
+                            c.content(format!("<@&{}>", m.id.0));
+                        }
                         c.embed(|e| {
                             e.title(&prize);
                             e.description(format!("{} winners", winners));

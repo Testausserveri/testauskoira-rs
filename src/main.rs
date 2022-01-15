@@ -105,6 +105,12 @@ impl EventHandler for Handler {
                                         .description("Arpajaistapahtuman palkinto")
                                         .kind(ApplicationCommandOptionType::String)
                                 })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("mention")
+                                        .description("Rooli joka mainitaan arpajaistapahtuman aloitettaessa")
+                                        .kind(ApplicationCommandOptionType::Role)
+                                })
                         })
                         .create_option(|option| {
                             option
