@@ -1,4 +1,3 @@
-// FIXME: There's a built-in way in diesel to do this
 #![allow(non_snake_case)]
 
 table! {
@@ -22,6 +21,36 @@ table! {
 }
 
 table! {
+    Giveaways (id) {
+        id -> Bigint,
+        message_id -> Unsigned<Bigint>,
+        channel_id -> Unsigned<Bigint>,
+        start_time -> Datetime,
+        end_time -> Datetime,
+        max_winners -> Bigint,
+        prize -> Text,
+        completed -> Bool,
+    }
+}
+
+table! {
+    GiveawayWinners (id) {
+        id -> Bigint,
+        giveaway_id -> Bigint,
+        user_id -> Unsigned<Bigint>,
+    }
+}
+
+table! {
+    messages_day_stat (id) {
+        id -> Integer,
+        date -> Nullable<Date>,
+        userid -> Nullable<Varchar>,
+        message_count -> Nullable<Integer>,
+    }
+}
+
+table! {
     SuspectMessageEdits (id) {
         id -> Integer,
         voting_message_id -> Unsigned<Bigint>,
@@ -40,18 +69,13 @@ table! {
     }
 }
 
-table! {
-    messages_day_stat (id) {
-        id -> Integer,
-        date -> Nullable<Date>,
-        userid -> Nullable<Varchar>,
-        message_count -> Nullable<Integer>,
-    }
-}
+joinable!(GiveawayWinners -> Giveaways (giveaway_id));
 
 allow_tables_to_appear_in_same_query!(
     CouncilVotings,
+    Giveaways,
+    GiveawayWinners,
+    messages_day_stat,
     SuspectMessageEdits,
     VotingActions,
-    messages_day_stat,
 );

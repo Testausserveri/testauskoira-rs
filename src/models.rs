@@ -93,3 +93,43 @@ pub struct NewSuspectMessageEdit {
     pub new_content: String,
     pub edit_time: chrono::NaiveDateTime,
 }
+
+use crate::schema::Giveaways;
+
+#[derive(Queryable)]
+pub struct Giveaway {
+    pub id: i64,
+    pub message_id: u64,
+    pub channel_id: u64,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+    pub max_winners: i64,
+    pub prize: String,
+    pub completed: bool,
+}
+
+#[derive(Insertable)]
+#[table_name = "Giveaways"]
+pub struct NewGiveaway {
+    pub message_id: u64,
+    pub channel_id: u64,
+    pub end_time: chrono::NaiveDateTime,
+    pub max_winners: i64,
+    pub prize: String,
+}
+
+use crate::schema::GiveawayWinners;
+
+#[derive(Queryable)]
+pub struct GiveawayWinner {
+    pub id: i64,
+    pub giveaway_id: i64,
+    pub user_id: u64,
+}
+
+#[derive(Insertable)]
+#[table_name = "GiveawayWinners"]
+pub struct NewGiveawayWinner {
+    pub giveaway_id: i64,
+    pub user_id: u64,
+}
