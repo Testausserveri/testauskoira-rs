@@ -1,6 +1,8 @@
-use crate::{commands::giveaway::end_giveaway, database::Database, Http, ReactionType};
-use chrono::{DateTime, Utc};
 use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+
+use crate::{commands::giveaway::end_giveaway, database::Database, Http, ReactionType};
 
 pub async fn update_giveaways(http: Arc<Http>, db: Database) {
     let reaction_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")

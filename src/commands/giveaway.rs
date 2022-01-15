@@ -1,9 +1,9 @@
-use chrono::{DateTime, Utc};
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
+use rand::seq::SliceRandom;
 use serenity::{
-    builder::{CreateComponents, CreateEmbed, CreateEmbedFooter},
+    builder::{CreateComponents, CreateEmbed},
     model::{
         interactions::{
             message_component::ButtonStyle, InteractionApplicationCommandCallbackDataFlags,
@@ -30,14 +30,6 @@ async fn ensure_offset_map(ctx: &Context) {
     if !data.contains_key::<ListOffset>() {
         data.insert::<ListOffset>(HashMap::new());
     }
-}
-
-fn footer_with_text<S: Into<String>>(text: S) -> CreateEmbedFooter {
-    let mut footer = CreateEmbedFooter {
-        0: std::collections::HashMap::new(),
-    };
-    footer.text(text.into());
-    footer
 }
 
 fn generate_list_components(offset: i64, giveaways: i64) -> CreateComponents {
@@ -159,9 +151,7 @@ async fn reroll_giveaway(
                 e.title(&giveaway.prize);
                 e.description(format!("Winners: {}", winners_string));
                 e.timestamp(DateTime::<Utc>::from_utc(giveaway.end_time, Utc));
-                e.set_footer(footer_with_text(
-                    format!("ID: {} | ended at", giveaway.id).as_str(),
-                ))
+                e.footer(|f| f.text(format!("ID: {} | ended at", giveaway.id).as_str()))
             })
         })
         .await?;
@@ -278,8 +268,8 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
         .parse()
         .expect("GIVEAWAY_DEFAULT_WINNERS is not a valid integer");
 
-    let default_prize: String = std::env::var("GIVEAWAY_DEFAULT_PRIZE")
-        .expect("GIVEAWAY_DEFAULT_PRIZE is not set");
+    let default_prize: String =
+        std::env::var("GIVEAWAY_DEFAULT_PRIZE").expect("GIVEAWAY_DEFAULT_PRIZE is not set");
 
     ensure_offset_map(&ctx).await;
     let mut data = ctx.data.write().await;
@@ -312,7 +302,8 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 });
             let mention = sub_options
                 .by_name("mention")
-                .map(|x| x.to_role()).unwrap_or(None);
+                .map(|x| x.to_role())
+                .unwrap_or(None);
 
             if winners < 1 || duration < 1 {
                 interaction
@@ -339,7 +330,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                             e.title(&prize);
                             e.description(format!("{} winners", winners));
                             e.timestamp(end);
-                            e.set_footer(footer_with_text("ID: ? | ends at"))
+                            e.footer(|f| f.text("ID: ? | ends at"))
                         })
                     })
                     .await
@@ -361,7 +352,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                                     e.title(prize);
                                     e.description(format!("{} winners", winners));
                                     e.timestamp(end);
-                                    e.set_footer(footer_with_text(format!("ID: {} | ends at", id)))
+                                    e.footer(|f| f.text(format!("ID: {} | ends at", id)))
                                 })
                             })
                             .await
@@ -471,7 +462,6 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 .get_message(giveaway.channel_id, giveaway.message_id)
                 .await
                 .unwrap();
-            let footer = footer_with_text(format!("ID: {} | ends at", giveaway.id));
 
             match field.as_str() {
                 "winners" => {
@@ -484,7 +474,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                                 e.title(giveaway.prize);
                                 e.description(format!("{} winners", new_value));
                                 e.timestamp(DateTime::<Utc>::from_utc(giveaway.end_time, Utc));
-                                e.set_footer(footer)
+                                e.footer(|f| f.text(format!("ID: {} | ends at", giveaway_id)))
                             })
                         })
                         .await
@@ -514,10 +504,10 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                     message
                         .edit(&ctx.http, |e| {
                             e.embed(|e| {
-                                e.title(giveaway.prize);
+                                e.title(&giveaway.prize);
                                 e.description(format!("{} winners", giveaway.max_winners));
                                 e.timestamp(DateTime::<Utc>::from_utc(new_time, Utc));
-                                e.set_footer(footer)
+                                e.footer(|f| f.text(format!("ID: {} | ends at", giveaway.id)))
                             })
                         })
                         .await

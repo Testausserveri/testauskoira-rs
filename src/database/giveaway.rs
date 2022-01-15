@@ -1,10 +1,8 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-use chrono::NaiveDateTime;
-
-use crate::{models::*, Message};
-
 use super::Database;
+use crate::{models::*, Message};
 
 impl Database {
     pub async fn start_giveaway<S: Into<String>>(
