@@ -84,7 +84,7 @@ impl Database {
         Ok(Giveaways.load::<Giveaway>(&self.pool.get()?)?)
     }
 
-    pub async fn get_uncompleted_giveaways(&self) -> Result<Vec<Giveaway>, anyhow::Error> {
+    pub async fn get_ongoing_giveaways(&self) -> Result<Vec<Giveaway>, anyhow::Error> {
         use crate::schema::Giveaways::dsl::*;
         Ok(Giveaways
             .filter(completed.eq(false))

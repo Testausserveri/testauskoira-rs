@@ -19,11 +19,6 @@ use crate::{
     User,
 };
 
-static DEFAULT_DURATION: i64 = 3600;
-static DEFAULT_WINNERS: i64 = 1;
-static DEFAULT_PRIZE: &str = "Nothing :(";
-pub static GIVEAWAY_REACTION_CHAR: char = '🎉';
-
 struct ListOffset;
 
 impl TypeMapKey for ListOffset {
@@ -268,6 +263,24 @@ pub async fn handle_component_interaction(ctx: &Context, interaction: &Interacti
 pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandInteraction) {
     let db = ctx.get_db().await;
 
+    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
+        .expect("GIVEAWAY_REACTION_EMOJI is not set")
+        .parse()
+        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+
+    let default_duration: i64 = std::env::var("GIVEAWAY_DEFAULT_DURATION")
+        .expect("GIVEAWAY_DEFAULT_DURATION is not set")
+        .parse()
+        .expect("GIVEAWAY_DEFAULT_DURATION is not a valid integer");
+
+    let default_winners: i64 = std::env::var("GIVEAWAY_DEFAULT_WINNERS")
+        .expect("GIVEAWAY_DEFAULT_WINNERS is not set")
+        .parse()
+        .expect("GIVEAWAY_DEFAULT_WINNERS is not a valid integer");
+
+    let default_prize: String = std::env::var("GIVEAWAY_DEFAULT_PRIZE")
+        .expect("GIVEAWAY_DEFAULT_PRIZE is not set");
+
     ensure_offset_map(&ctx).await;
     let mut data = ctx.data.write().await;
     let offset_map = data.get_mut::<ListOffset>().unwrap();
@@ -288,14 +301,14 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 .expect("Invalid channel option");
             let duration = sub_options
                 .by_name("duration")
-                .map_or(DEFAULT_DURATION, |x| x.to_i64().unwrap_or(DEFAULT_DURATION));
+                .map_or(default_duration, |x| x.to_i64().unwrap_or(default_duration));
             let winners = sub_options
                 .by_name("winners")
-                .map_or(DEFAULT_WINNERS, |x| x.to_i64().unwrap_or(DEFAULT_WINNERS));
+                .map_or(default_winners, |x| x.to_i64().unwrap_or(default_winners));
             let prize = sub_options
                 .by_name("prize")
-                .map_or(DEFAULT_PRIZE.to_string(), |x| {
-                    x.to_string().unwrap_or(DEFAULT_PRIZE.to_string())
+                .map_or(default_prize.clone(), |x| {
+                    x.to_string().unwrap_or(default_prize.clone())
                 });
             let mention = sub_options
                 .by_name("mention")
@@ -333,7 +346,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                     .unwrap();
 
                 message
-                    .react(&ctx.http, ReactionType::from(GIVEAWAY_REACTION_CHAR))
+                    .react(&ctx.http, ReactionType::from(giveaway_emoji))
                     .await
                     .unwrap();
 
@@ -415,7 +428,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 &ctx.http,
                 &db,
                 &giveaway,
-                ReactionType::from(GIVEAWAY_REACTION_CHAR),
+                ReactionType::from(giveaway_emoji),
             )
             .await
             .unwrap();
@@ -553,7 +566,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                         &ctx.http,
                         &db,
                         &giveaway,
-                        ReactionType::from(GIVEAWAY_REACTION_CHAR),
+                        ReactionType::from(giveaway_emoji),
                     )
                     .await
                     .unwrap();
