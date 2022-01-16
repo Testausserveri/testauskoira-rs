@@ -50,7 +50,7 @@ Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://d
 
 Repository on konfiguroitu automaattisesti julkaisemaan itsensä halutulle palvelimelle. Palvelin pitää tosin valmistella ensiksi kloonaamalla tämä repository sinne ja asettamalla tiedoston `.env`-arvot. Kun joku puskee uuden muutoksen myöhemmin `main`-haaraan ohjelma rakennetaan Githubin palvelimella, pusketaan heidän dockerkuva-arkistoon, ladataan arkistosta tuotantopalvelimelle ja käynnistetään. 
 
-Automaattisen julkaisemisen toimiminen vaatii seuraavien salaisten arvojen asettaminen repositoryn (tapahtuu osoitteessa: [https://github.com/<user>/<repository>/settings/secrets/actions](https://github.com/<user>/<repository>/settings/secrets/actions). Arvojen tulee olla:
+Automaattisen julkaisemisen toimiminen vaatii seuraavien salaisten arvojen asettaminen repositoryn (tapahtuu osoitteessa: [https://github.com/user/repository/settings/secrets/actions](https://github.com/user/repository/settings/secrets/actions). Arvojen tulee olla:
 
 | Avain | Arvo |
 | --- | ----- |
