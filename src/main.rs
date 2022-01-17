@@ -225,8 +225,8 @@ impl EventHandler for Handler {
                 _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
             },
             Interaction::MessageComponent(_) => {
-                voting::handle_vote_interaction(&ctx, &interaction).await;
-                commands::giveaway::handle_component_interaction(&ctx, &interaction).await;
+                voting::handle_vote_interaction(&ctx, interaction.clone()).await;
+                commands::giveaway::handle_component_interaction(&ctx, interaction.clone()).await;
             }
             _ => {}
         };

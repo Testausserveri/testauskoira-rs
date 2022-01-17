@@ -191,13 +191,13 @@ pub async fn end_giveaway(
     Ok(())
 }
 
-pub async fn handle_component_interaction(ctx: &Context, interaction: &Interaction) {
+pub async fn handle_component_interaction(ctx: &Context, interaction: Interaction) {
     let db = ctx.get_db().await;
     ensure_offset_map(&ctx).await;
     let mut data = ctx.data.write().await;
     let offsets = data.get_mut::<ListOffset>().unwrap();
 
-    if let Interaction::MessageComponent(component) = interaction.to_owned() {
+    if let Interaction::MessageComponent(component) = interaction {
         match component.data.custom_id.as_str() {
             "GIVEAWAY_list_back" => {
                 let mut offset = offsets.get(&component.user.id.0).unwrap_or(&0).to_owned();
