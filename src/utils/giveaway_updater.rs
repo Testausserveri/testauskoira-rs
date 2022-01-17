@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 
 use crate::{commands::giveaway::end_giveaway, database::Database, Http, ReactionType};
 
-pub async fn update_giveaways(http: Arc<Http>, db: Database) {
+pub async fn update_giveaways(http: Arc<Http>, db: impl AsRef<Database>) {
+    let db = db.as_ref();
     let reaction_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
         .expect("GIVEAWAY_REACTION_EMOJI is not set")
         .parse()

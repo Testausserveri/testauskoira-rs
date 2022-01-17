@@ -2,6 +2,7 @@ pub mod commands;
 pub mod database;
 pub mod extensions;
 pub mod models;
+pub mod scheduled;
 pub mod schema;
 pub mod utils;
 pub mod voting;
@@ -13,7 +14,7 @@ extern crate diesel;
 
 use std::{collections::HashSet, env, sync::Arc};
 
-use clokwerk::{Scheduler, TimeUnits};
+use clokwerk::Scheduler;
 use commands::owner::*;
 use database::Database;
 use extensions::*;
@@ -30,7 +31,6 @@ use serenity::{
     },
     prelude::*,
 };
-use utils::{giveaway_updater::update_giveaways, winner_showcase::*};
 
 pub struct ShardManagerContainer;
 
@@ -413,28 +413,20 @@ async fn main() {
 
     let shard_manager = client.shard_manager.clone();
 
-    let winner_runtime = tokio::runtime::Runtime::new().unwrap();
-    let giveaway_runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let http = client.cache_and_http.http.clone();
+    let db = Arc::new(client.get_db().await);
+
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
-    let winner_http = client.cache_and_http.http.clone();
-    let winner_db = client.get_db().await;
-    scheduler.every(1.day()).at("00:00").run(move || {
-        winner_runtime.block_on(display_winner(
-            winner_http.to_owned(),
-            winner_db.to_owned(),
-            1,
-        ));
-    });
-
-    let giveaway_http = client.cache_and_http.http.clone();
-    let giveaway_db = client.get_db().await;
-    scheduler.every(5.seconds()).run(move || {
-        giveaway_runtime.block_on(update_giveaways(
-            giveaway_http.to_owned(),
-            giveaway_db.to_owned(),
-        ));
-    });
+    for func in crate::scheduled::SETUP_FUNCTIONS {
+        func(
+            &mut scheduler,
+            runtime.handle().to_owned(),
+            http.clone(),
+            db.clone(),
+        );
+    }
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
 
@@ -442,6 +434,7 @@ async fn main() {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
+        runtime.shutdown_background();
         thread_handle.stop();
         shard_manager.lock().await.shutdown_all().await;
     });
