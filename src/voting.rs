@@ -179,12 +179,12 @@ async fn update_voting_message(ctx: &Context, voting_message_id: u64) {
         .unwrap()
 }
 
-// This handles a message_changed event an checks for
-// reported messages that are edited. It then updates the message on the
-// moderation channel with the message's new content and the time of the edit.
-//
-// (Due to discord limitations the maximum number of logged edits is 9 after which they will no
-// longer be logged)
+/// This handles a message_changed event an checks for
+/// reported messages that are edited. It then updates the message on the
+/// moderation channel with the message's new content and the time of the edit.
+///
+/// (Due to discord limitations the maximum number of logged edits is 9 after which they will no
+/// longer be logged)
 // NOTE: This could become a problem in which case a workaround can be implemented
 pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
     if !is_reported(ctx, event.id.0).await {
@@ -198,10 +198,10 @@ pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
     update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
-// This handles the deletion of a message
-// First it check whether the message is reported
-// After that it proceeds accordingly.
-// If a reported message is deleted the deletion time will be logged into the embed-chain
+/// This handles the deletion of a message
+/// First it check whether the message is reported
+/// After that it proceeds accordingly.
+/// If a reported message is deleted the deletion time will be logged into the embed-chain
 pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
     if !is_reported(ctx, message_id.0).await {
         return;
@@ -217,9 +217,9 @@ pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
     update_voting_message(ctx, voting_event.vote_message_id as u64).await;
 }
 
-// Handles an event where a message was reported using the "⛔ Ilmianna viesti" message command
-// This sends an embed to the moderation channel, containing some information about the message
-// and the reported
+/// Handles an event where a message was reported using the "⛔ Ilmianna viesti" message command
+/// This sends an embed to the moderation channel, containing some information about the message
+/// and the reported
 pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInteraction) {
     let no_reports_role_id: u64 = env::var("NO_REPORTS_ROLE_ID")
         .expect("Expected NO_REPORTS_ROLE_ID in .env")
@@ -323,9 +323,9 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         .unwrap();
 }
 
-// Get the amount of online members who have access to the moderation channel.
-// This is done by comparing the members of the channel to the member that are currently present on
-// the server.
+/// Get the amount of online members who have access to the moderation channel.
+/// This is done by comparing the members of the channel to the member that are currently present on
+/// the server.
 async fn get_online_mod_count(ctx: &Context) -> usize {
     let channelid = env::var("MOD_CHANNEL_ID")
         .expect("MOD_CHANNEL_ID id expected")
@@ -340,7 +340,7 @@ async fn get_online_mod_count(ctx: &Context) -> usize {
     unreachable!()
 }
 
-// Check if the given user is a moderator or not, based on their access to the moderation channel
+/// Check if the given user is a moderator or not, based on their access to the moderation channel
 async fn is_moderator(ctx: &Context, user: &User) -> bool {
     let channelid = env::var("MOD_CHANNEL_ID")
         .expect("MOD_CHANNEL_ID id expected")
@@ -356,10 +356,10 @@ async fn is_moderator(ctx: &Context, user: &User) -> bool {
     unreachable!();
 }
 
-// The function to handle a vote-addition event for the "delete_button"
-// This function adds the vote then checks whether the goal is reached
-// and then acts accordingly, either by deleting the message and then updating
-// the announcement on the moderation channel or just by updating the announcement
+/// The function to handle a vote-addition event for the "delete_button"
+/// This function adds the vote then checks whether the goal is reached
+/// and then acts accordingly, either by deleting the message and then updating
+/// the announcement on the moderation channel or just by updating the announcement
 async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
@@ -392,10 +392,10 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
-// The function to handle a vote-addition event for the "ban_button"
-// This function adds the vote then checks whether the goal is reached
-// and then acts accordingly, either by banning the member and then updating
-// the announcement on the moderation channel or just by updating the announcement
+/// The function to handle a vote-addition event for the "ban_button"
+/// This function adds the vote then checks whether the goal is reached
+/// and then acts accordingly, either by banning the member and then updating
+/// the announcement on the moderation channel or just by updating the announcement
 //
 // NOTE: The ban actually only applies the "silenced" role upon the user
 async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
@@ -432,9 +432,9 @@ async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
-// This function handles the press off the "abuse_button"
-// If the vote-goal is reached, the user will be given a
-// role that prevents them from further abusing the reporting feature
+/// This function handles the press off the "abuse_button"
+/// If the vote-goal is reached, the user will be given a
+/// role that prevents them from further abusing the reporting feature
 async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
@@ -469,9 +469,9 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
-// This function handles the vote-interactions and the report interaction and
-// calls the appropriate functions for them (logging stuff in the logs)
-pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
+/// This function handles the vote-interactions and the report interaction and
+/// calls the appropriate functions for them (logging stuff in the logs)
+pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
     if let Interaction::MessageComponent(mut component) = interaction {
         match component.data.custom_id.as_str() {
             "delete_button" => {
