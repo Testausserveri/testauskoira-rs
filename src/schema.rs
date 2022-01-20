@@ -38,6 +38,7 @@ table! {
         id -> Bigint,
         giveaway_id -> Bigint,
         user_id -> Unsigned<Bigint>,
+        rerolled -> Bool,
     }
 }
 

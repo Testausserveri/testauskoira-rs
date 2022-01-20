@@ -125,6 +125,7 @@ pub struct GiveawayWinner {
     pub id: i64,
     pub giveaway_id: i64,
     pub user_id: u64,
+    pub rerolled: bool,
 }
 
 #[derive(Insertable)]

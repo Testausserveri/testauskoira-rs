@@ -130,6 +130,12 @@ impl EventHandler for Handler {
                                         .description("Arpajaistapahtuman id")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("allow_past")
+                                        .description("Salli entisten voittajien uudelleenvalitseminen, oletus = false")
+                                        .kind(ApplicationCommandOptionType::Boolean)
+                                })
                         })
                         .create_option(|option| {
                             option

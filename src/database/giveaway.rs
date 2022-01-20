@@ -89,6 +89,17 @@ impl Database {
             .load::<Giveaway>(&self.pool.get()?)?)
     }
 
+    pub async fn get_giveaway_winners(
+        &self,
+        filter_giveaway_id: i64,
+    ) -> Result<Vec<GiveawayWinner>, anyhow::Error> {
+        use crate::schema::GiveawayWinners::dsl::*;
+
+        Ok(GiveawayWinners
+            .filter(giveaway_id.eq(filter_giveaway_id))
+            .load::<GiveawayWinner>(&self.pool.get()?)?)
+    }
+
     pub async fn set_giveaway_completed(
         &self,
         giveaway_id: i64,
@@ -104,7 +115,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn set_giveaway_winners(
+    pub async fn add_giveaway_winners(
         &self,
         giveaway_id: i64,
         winners: &Vec<u64>,
@@ -113,6 +124,7 @@ impl Database {
 
         diesel::delete(GiveawayWinners::table)
             .filter(GiveawayWinners::giveaway_id.eq(giveaway_id))
+            .filter(GiveawayWinners::user_id.eq_any(winners))
             .execute(&self.pool.get()?)?;
 
         diesel::insert_into(GiveawayWinners::table)
@@ -125,6 +137,22 @@ impl Database {
                     })
                     .collect::<Vec<NewGiveawayWinner>>(),
             )
+            .execute(&self.pool.get()?)?;
+
+        Ok(())
+    }
+
+    pub async fn set_giveaway_winners_rerolled(
+        &self,
+        giveaway_id: i64,
+        winners: &Vec<u64>,
+    ) -> Result<(), anyhow::Error> {
+        use crate::schema::GiveawayWinners;
+
+        diesel::update(GiveawayWinners::table)
+            .filter(GiveawayWinners::giveaway_id.eq(giveaway_id))
+            .filter(GiveawayWinners::user_id.eq_any(winners))
+            .set(GiveawayWinners::rerolled.eq(true))
             .execute(&self.pool.get()?)?;
 
         Ok(())
@@ -160,16 +188,5 @@ impl Database {
         Ok(Giveaways
             .filter(id.eq(giveaway_id))
             .first::<Giveaway>(&self.pool.get()?)?)
-    }
-
-    pub async fn get_giveaway_winners(
-        &self,
-        filter_giveaway_id: i64,
-    ) -> Result<Vec<GiveawayWinner>, anyhow::Error> {
-        use crate::schema::GiveawayWinners::dsl::*;
-
-        Ok(GiveawayWinners
-            .filter(giveaway_id.eq(filter_giveaway_id))
-            .load::<GiveawayWinner>(&self.pool.get()?)?)
     }
 }

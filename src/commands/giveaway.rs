@@ -122,18 +122,20 @@ async fn roll_winners(candidates: &Vec<User>, max_winners: i64) -> Vec<User> {
         .collect()
 }
 
-async fn reroll_giveaway(
+async fn roll_giveaway(
     http: &Http,
     db: &Database,
     giveaway: &Giveaway,
     reaction: ReactionType,
+    excluded: Option<Vec<u64>>,
 ) -> Result<(), anyhow::Error> {
+    let excluded = excluded.unwrap_or_else(|| Vec::new());
     let mut message = http
         .get_message(giveaway.channel_id, giveaway.message_id)
         .await?;
     let candidates = get_reacters(&http, &message, reaction.clone())
         .await
-        .map(|v| v.into_iter().filter(|x| !x.bot).collect::<Vec<User>>())?;
+        .map(|v| v.into_iter().filter(|x| !x.bot && !excluded.contains(&x.id.0)).collect::<Vec<User>>())?;
     let winners = roll_winners(&candidates, giveaway.max_winners).await;
     let winners_string = if winners.is_empty() {
         "Nobody...".to_string()
@@ -172,7 +174,7 @@ async fn reroll_giveaway(
             )
             .await?;
     }
-    db.set_giveaway_winners(giveaway.id, &winners.iter().map(|u| u.id.0).collect())
+    db.add_giveaway_winners(giveaway.id, &winners.iter().map(|u| u.id.0).collect())
         .await?;
     info!("Successfully rolled winners for giveaway {}", giveaway.id);
     Ok(())
@@ -185,7 +187,7 @@ pub async fn end_giveaway(
     reaction: ReactionType,
 ) -> Result<(), anyhow::Error> {
     let giveaway_id = giveaway.id;
-    reroll_giveaway(&http, &db, giveaway, reaction.clone()).await?;
+    roll_giveaway(&http, &db, giveaway, reaction.clone(), None).await?;
     db.end_giveaway(giveaway_id).await?;
     info!("Successfully ended giveaway {}", giveaway_id);
     Ok(())
@@ -413,13 +415,28 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 .expect("Missing giveaway id")
                 .to_i64()
                 .expect("Invalid giveaway id");
+            let allow_past = sub_options
+                .by_name("allow_past")
+                .map_or(false, |x| x.to_bool().unwrap_or(false));
             let giveaway = db.get_giveaway(giveaway_id).await.unwrap();
 
-            reroll_giveaway(
+            let excluded = if !allow_past {
+                Some(db.get_giveaway_winners(giveaway.id)
+                .await
+                .map(|x| x.into_iter().map(|x| x.user_id).collect())
+                .unwrap())
+            } else { None };
+
+            if !allow_past {
+                db.set_giveaway_winners_rerolled(giveaway_id, excluded.as_ref().unwrap()).await.unwrap();
+            }
+
+            roll_giveaway(
                 &ctx.http,
                 &db,
                 &giveaway,
                 ReactionType::from(giveaway_emoji),
+                excluded
             )
             .await
             .unwrap();
