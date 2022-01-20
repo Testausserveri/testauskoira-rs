@@ -271,7 +271,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
         .expect("GIVEAWAY_DEFAULT_WINNERS is not a valid integer");
 
     let default_prize: String =
-        std::env::var("GIVEAWAY_DEFAULT_PRIZE").expect("GIVEAWAY_DEFAULT_PRIZE is not set");
+        std::env::var("GIVEAWAY_DEFAULT_PRIZE").unwrap_or("Nothing".to_string());
 
     ensure_offset_map(&ctx).await;
     let mut data = ctx.data.write().await;
