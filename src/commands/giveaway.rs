@@ -256,17 +256,17 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
     let db = ctx.get_db().await;
 
     let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
-        .expect("GIVEAWAY_REACTION_EMOJI is not set")
+        .unwrap_or("🎉".to_string())
         .parse()
         .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
 
     let default_duration: i64 = std::env::var("GIVEAWAY_DEFAULT_DURATION")
-        .expect("GIVEAWAY_DEFAULT_DURATION is not set")
+        .unwrap_or("3600".to_string())
         .parse()
         .expect("GIVEAWAY_DEFAULT_DURATION is not a valid integer");
 
     let default_winners: i64 = std::env::var("GIVEAWAY_DEFAULT_WINNERS")
-        .expect("GIVEAWAY_DEFAULT_WINNERS is not set")
+        .unwrap_or("1".to_string())
         .parse()
         .expect("GIVEAWAY_DEFAULT_WINNERS is not a valid integer");
 
