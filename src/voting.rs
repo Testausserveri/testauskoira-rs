@@ -471,7 +471,7 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
 
 /// This function handles the vote-interactions and the report interaction and
 /// calls the appropriate functions for them (logging stuff in the logs)
-pub async fn handle_vote_interaction(ctx: Context, interaction: Interaction) {
+pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
     if let Interaction::MessageComponent(mut component) = interaction {
         match component.data.custom_id.as_str() {
             "delete_button" => {
