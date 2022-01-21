@@ -8,7 +8,7 @@ RUN apt-get update
 
 RUN apt-get install build-essential
 
-RUN apt-get install gcc-aarch64-linux-gnu
+RUN yes | apt-get install gcc-aarch64-linux-gnu
 
 RUN rustup target add aarch64-unknown-linux-gnu
 
