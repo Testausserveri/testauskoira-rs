@@ -8,6 +8,8 @@ RUN apt-get update
 
 RUN apt-get install build-essential
 
+RUN apt install gcc-aarch64-linux-gnu
+
 RUN rustup target add aarch64-unknown-linux-gnu
 
 RUN RUSTFLAGS="-C target-feature=+crt-static" cargo b --release --target aarch64-unknown-linux-gnu
