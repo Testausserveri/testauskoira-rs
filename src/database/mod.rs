@@ -1,4 +1,5 @@
 use serenity::prelude::TypeMapKey;
+pub mod giveaway;
 pub mod message_logging;
 pub mod voting;
 
@@ -14,6 +15,12 @@ pub struct Database {
 
 impl TypeMapKey for Database {
     type Value = Database;
+}
+
+impl AsRef<Database> for Database {
+    fn as_ref(&self) -> &Database {
+        self
+    }
 }
 
 impl Database {
