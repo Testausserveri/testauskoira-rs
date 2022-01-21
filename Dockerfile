@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY . .
 
+RUN apt-get update
+
 RUN apt-get install build-essentials
 
 RUN rustup target add aarch64-unknown-linux-gnu
