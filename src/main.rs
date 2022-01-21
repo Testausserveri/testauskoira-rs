@@ -2,6 +2,7 @@ pub mod commands;
 pub mod database;
 pub mod extensions;
 pub mod models;
+pub mod scheduled;
 pub mod schema;
 pub mod utils;
 pub mod voting;
@@ -13,7 +14,7 @@ extern crate diesel;
 
 use std::{collections::HashSet, env, sync::Arc};
 
-use clokwerk::{Scheduler, TimeUnits};
+use clokwerk::Scheduler;
 use commands::owner::*;
 use database::Database;
 use extensions::*;
@@ -25,11 +26,11 @@ use serenity::{
     model::{
         event::{MessageUpdateEvent, ResumedEvent},
         gateway::Ready,
+        interactions::application_command::*,
         prelude::*,
     },
     prelude::*,
 };
-use utils::winner_showcase::*;
 
 pub struct ShardManagerContainer;
 
@@ -57,12 +58,141 @@ impl EventHandler for Handler {
             .parse()
             .expect("Invalid GUILD_ID provided");
         let guild_id = serenity::model::id::GuildId::from(guild_id);
-        guild_id
+        let admin_role_id: u64 = env::var("ADMIN_ROLE_ID")
+            .expect("No ADMIN_ROLE_ID in .env")
+            .parse()
+            .expect("Invalid ADMIN_ROLE_ID provided");
+        let commands = guild_id
             .set_application_commands(&ctx.http, |commands| {
                 commands.create_application_command(|command| {
                     command
                         .name("github")
                         .description("Vastaanota kutsu Testausserverin GitHub-organisaatioon")
+                });
+                commands.create_application_command(|command| {
+                    command
+                        .name("giveaway")
+                        .description("Luo arpajaistapahtuma tai hallinnoi olemassaolevia arpajaistapahtumia (:D)")
+                        .default_permission(false)
+                        .create_option(|option| {
+                            option
+                                .name("start")
+                                .description("Luo ja aloita arpajaistapahtuma")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("channel")
+                                        .description("Arpajaisilmoituksen kanava")
+                                        .required(true)
+                                        .channel_types(&[serenity::model::channel::ChannelType::Text])
+                                        .kind(ApplicationCommandOptionType::Channel)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("duration")
+                                        .description("Arpajaistapahtuman kesto (sekunneissa)")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("winners")
+                                        .description("Arpajaistapahtuman voittajien lukumäärä")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("prize")
+                                        .description("Arpajaistapahtuman palkinto")
+                                        .kind(ApplicationCommandOptionType::String)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("mention")
+                                        .description("Rooli joka mainitaan arpajaistapahtuman aloitettaessa")
+                                        .kind(ApplicationCommandOptionType::Role)
+                                })
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("list")
+                                .description("Luetteloi arpajaistapahtumat")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("reroll")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .description("Valitse uudelleen arpajaistapahtuman voittaja(t)")
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("giveaway_id")
+                                        .required(true)
+                                        .description("Arpajaistapahtuman id")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("allow_past")
+                                        .description("Salli entisten voittajien uudelleenvalitseminen, oletus = false")
+                                        .kind(ApplicationCommandOptionType::Boolean)
+                                })
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("edit")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .description("Muokkaa arpajaistapahtumaa")
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("giveaway_id")
+                                        .required(true)
+                                        .description("Arpajaistapahtuman id")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("field")
+                                        .required(true)
+                                        .description("Muokattava atribuutti/kenttä")
+                                        .kind(ApplicationCommandOptionType::String)
+                                        .add_string_choice("Arpajaistapahtuman kesto", "duration")
+                                        .add_string_choice("Arpajaistapahtuman voittajien lukumäärä", "winners")
+                                })
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("new_value")
+                                        .required(true)
+                                        .description("Uusi arvo")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("end")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .description("Lopeta arpajaistapahtuma")
+                                .create_sub_option(|subopt| {
+                                    subopt
+                                        .name("giveaway_id")
+                                        .description("Arpajaistapahtuman id")
+                                        .required(true)
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                })
+                        })
+                        .create_option(|option| {
+                                    option
+                                        .name("delete")
+                                        .kind(ApplicationCommandOptionType::SubCommand)
+                                        .description("Poista arpajaistapahtuma")
+                                        .create_sub_option(|subopt| {
+                                            subopt
+                                                .name("giveaway_id")
+                                                .description("Arpajaistapahtuman viestin id")
+                                                .required(true)
+                                                .kind(ApplicationCommandOptionType::Integer)
+                                        })
+                                })
+
                 });
                 commands.create_application_command(|command| {
                     command
@@ -72,6 +202,24 @@ impl EventHandler for Handler {
             })
             .await
             .unwrap();
+        for command in commands {
+            if !command.default_permission {
+                guild_id.set_application_commands_permissions(&ctx.http, |perms| {
+                        perms.create_application_command(|command_perms| {
+                            command_perms
+                                .id(command.id.0)
+                                .create_permissions(|cp| {
+                                    cp
+                                        .kind(serenity::model::interactions::application_command::ApplicationCommandPermissionType::Role)
+                                        .id(admin_role_id)
+                                        .permission(true)
+                                })
+                        })
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -79,10 +227,12 @@ impl EventHandler for Handler {
             Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
                 "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
                 "github" => commands::links::github(&ctx, a.to_owned()).await,
+                "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
                 _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
             },
             Interaction::MessageComponent(_) => {
-                voting::handle_vote_interaction(ctx, interaction).await;
+                voting::handle_vote_interaction(&ctx, interaction.clone()).await;
+                commands::giveaway::handle_component_interaction(&ctx, interaction.clone()).await;
             }
             _ => {}
         };
@@ -270,14 +420,19 @@ async fn main() {
     let shard_manager = client.shard_manager.clone();
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
+    let http = client.cache_and_http.http.clone();
+    let db = Arc::new(client.get_db().await);
+
     let mut scheduler = Scheduler::with_tz(chrono::Local);
 
-    let db = client.get_db().await;
-    let http = client.cache_and_http.http.clone();
-
-    scheduler.every(1.day()).at("00:00").run(move || {
-        runtime.block_on(display_winner(http.to_owned(), db.to_owned(), 1));
-    });
+    for func in crate::scheduled::SETUP_FUNCTIONS {
+        func(
+            &mut scheduler,
+            runtime.handle().to_owned(),
+            http.clone(),
+            db.clone(),
+        );
+    }
 
     let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
 
@@ -285,6 +440,7 @@ async fn main() {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
+        runtime.shutdown_background();
         thread_handle.stop();
         shard_manager.lock().await.shutdown_all().await;
     });
