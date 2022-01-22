@@ -461,7 +461,7 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
             .expect("Invalid NO_REPORTS_ROLE_ID provided");
         let mut member = ctx
             .http
-            .get_member(guild_id, event.suspect_id as u64)
+            .get_member(guild_id, event.reporter_id as u64)
             .await
             .unwrap();
         member.add_role(&ctx.http, abuse_role).await.unwrap();
