@@ -53,6 +53,7 @@ jobs:
         host: ${{ secrets.SSH_IP }}
         username: ${{ secrets.SSH_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
+        command_timeout: 180m
         script: |
           cd ${{ secrets.SSH_DIR }}
           git pull
