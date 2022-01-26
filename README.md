@@ -40,6 +40,7 @@ AWARD_CHANNEL_ID=
 NO_REPORTS_ROLE_ID=
 AWARD_ROLE_ID=
 SILENCED_ROLE_ID=
+ADMIN_ROLE_ID=
 ```
 
 Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:
