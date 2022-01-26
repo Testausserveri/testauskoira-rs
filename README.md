@@ -43,7 +43,7 @@ SILENCED_ROLE_ID=
 GIVEAWAY_DEFAULT_DURATION=
 GIVEAWAY_DEFAULT_WINNERS=
 GIVEAWAY_DEFAULT_PRIZE=
-GIVEAWAY_REACTION_EMOJI
+GIVEAWAY_REACTION_EMOJI=
 ```
 
 Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:
