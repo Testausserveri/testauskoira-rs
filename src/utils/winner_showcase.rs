@@ -102,7 +102,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
                             Ok(m) => {
                                 e.field(
                                     format!("Sijalla {}.", ranking),
-                                    format!("{}, {} viestiä {:.2}%", m, msg_count, msg_percent),
+                                    format!("{}, {} viestiä ({:.1} %)", m, msg_count, msg_percent),
                                     false,
                                 );
                             }
@@ -110,7 +110,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
                                 e.field(
                                     format!("Sijalla {}.", ranking),
                                     format!(
-                                        "Entinen jäsen, {} viestiä {:.2}%",
+                                        "Entinen jäsen, {} viestiä ({:.1} %)",
                                         msg_count, msg_percent
                                     ),
                                     false,
