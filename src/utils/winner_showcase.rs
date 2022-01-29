@@ -91,6 +91,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
             m.add_file(std::path::Path::new(&img_name));
             m.embed(|e| {
                 e.title("Aktiivisimmat jäsenet");
+                e.color(serenity::utils::Color::from_rgb(68, 82, 130));
                 e.image(format!("attachment://{}", img_name));
                 winners
                     .iter()
