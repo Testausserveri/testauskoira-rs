@@ -32,9 +32,9 @@ async fn give_award_role(http: &Http, db: Database, winner: u64, offset: i32) {
         .await)
         .is_ok()
     {
-        info!("Removed role from previous winner {}", previous_winner);
+        info!("Rooli poistettu edelliseltä voittajalta {}", previous_winner);
     } else {
-        info!("No previous winner");
+        info!("Ei aiempaa voittajaa");
     }
 }
 
@@ -90,7 +90,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
         .send_message(http.clone(), |m| {
             m.add_file(std::path::Path::new(&img_name));
             m.embed(|e| {
-                e.title("Most active members");
+                e.title("Aktiivisimmat jäsenet");
                 e.image(format!("attachment://{}", img_name));
                 winners
                     .iter()
@@ -100,16 +100,16 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
                         match member {
                             Ok(m) => {
                                 e.field(
-                                    format!("Number {}.", ranking),
-                                    format!("{}, {} messages {:.2}%", m, msg_count, msg_percent),
+                                    format!("Sijalla {}.", ranking),
+                                    format!("{}, {} viestiä {:.2}%", m, msg_count, msg_percent),
                                     false,
                                 );
                             }
                             Err(err) => {
                                 e.field(
-                                    format!("Number {}.", ranking),
+                                    format!("Sijalla {}.", ranking),
                                     format!(
-                                        "Former member, {} messages {:.2}%",
+                                        "Entinen jäsen, {} viestiä {:.2}%",
                                         msg_count, msg_percent
                                     ),
                                     false,
