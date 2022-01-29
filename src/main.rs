@@ -67,17 +67,17 @@ impl EventHandler for Handler {
                 commands.create_application_command(|command| {
                     command
                         .name("github")
-                        .description("Vastaanota kutsu Testausserverin GitHub-organisaatioon")
+                        .description("Saa kutsu Testausserverin GitHub-organisaatioon")
                 });
                 commands.create_application_command(|command| {
                     command
                         .name("giveaway")
-                        .description("Luo arpajaistapahtuma tai hallinnoi olemassaolevia arpajaistapahtumia (:D)")
+                        .description("Luo arvonta tai hallitse käynnissä olevia arpajaisia")
                         .default_permission(false)
                         .create_option(|option| {
                             option
                                 .name("start")
-                                .description("Luo ja aloita arpajaistapahtuma")
+                                .description("Luo ja aloita arvonta")
                                 .kind(ApplicationCommandOptionType::SubCommand)
                                 .create_sub_option(|subopt| {
                                     subopt
@@ -90,44 +90,44 @@ impl EventHandler for Handler {
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("duration")
-                                        .description("Arpajaistapahtuman kesto (sekunneissa)")
+                                        .description("Arpajaisten kesto (sekunneissa)")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("winners")
-                                        .description("Arpajaistapahtuman voittajien lukumäärä")
+                                        .description("Arpajaisten voittajien lukumäärä")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("prize")
-                                        .description("Arpajaistapahtuman palkinto")
+                                        .description("Arpajaisten palkinto")
                                         .kind(ApplicationCommandOptionType::String)
                                 })
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("mention")
-                                        .description("Rooli joka mainitaan arpajaistapahtuman aloitettaessa")
+                                        .description("Rooli joka mainitaan arpajaisilmoituksessa")
                                         .kind(ApplicationCommandOptionType::Role)
                                 })
                         })
                         .create_option(|option| {
                             option
                                 .name("list")
-                                .description("Luetteloi arpajaistapahtumat")
+                                .description("Luetteloi arpajaiset")
                                 .kind(ApplicationCommandOptionType::SubCommand)
                         })
                         .create_option(|option| {
                             option
                                 .name("reroll")
                                 .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Valitse uudelleen arpajaistapahtuman voittaja(t)")
+                                .description("Arvo uudelleen arpajaisten voittaja(t)")
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("giveaway_id")
                                         .required(true)
-                                        .description("Arpajaistapahtuman id")
+                                        .description("Arvonnan tunniste")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
                                 .create_sub_option(|subopt| {
@@ -141,22 +141,22 @@ impl EventHandler for Handler {
                             option
                                 .name("edit")
                                 .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Muokkaa arpajaistapahtumaa")
+                                .description("Muokkaa arpajaisia")
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("giveaway_id")
                                         .required(true)
-                                        .description("Arpajaistapahtuman id")
+                                        .description("Arvonnan tunniste")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("field")
                                         .required(true)
-                                        .description("Muokattava atribuutti/kenttä")
+                                        .description("Muokattava ominaisuus")
                                         .kind(ApplicationCommandOptionType::String)
-                                        .add_string_choice("Arpajaistapahtuman kesto", "duration")
-                                        .add_string_choice("Arpajaistapahtuman voittajien lukumäärä", "winners")
+                                        .add_string_choice("Arpajaisten kesto", "duration")
+                                        .add_string_choice("Arpajaisten voittajien lukumäärä", "winners")
                                 })
                                 .create_sub_option(|subopt| {
                                     subopt
@@ -170,11 +170,11 @@ impl EventHandler for Handler {
                             option
                                 .name("end")
                                 .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Lopeta arpajaistapahtuma")
+                                .description("Lopeta arpajaiset")
                                 .create_sub_option(|subopt| {
                                     subopt
                                         .name("giveaway_id")
-                                        .description("Arpajaistapahtuman id")
+                                        .description("Arvonnan tunniste")
                                         .required(true)
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
@@ -183,11 +183,11 @@ impl EventHandler for Handler {
                                     option
                                         .name("delete")
                                         .kind(ApplicationCommandOptionType::SubCommand)
-                                        .description("Poista arpajaistapahtuma")
+                                        .description("Poista arpajaiset")
                                         .create_sub_option(|subopt| {
                                             subopt
                                                 .name("giveaway_id")
-                                                .description("Arpajaistapahtuman viestin id")
+                                                .description("Arvonnan tunniste")
                                                 .required(true)
                                                 .kind(ApplicationCommandOptionType::Integer)
                                         })
