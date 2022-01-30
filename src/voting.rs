@@ -63,7 +63,7 @@ fn generate_moderation_message(
             true,
         );
         e.field(
-            "Ilmoitusten tehnyt",
+            "Ilmoituksen tehnyt",
             format!("<@{}>", voting.reporter_id),
             true,
         );
