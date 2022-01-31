@@ -90,8 +90,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
         .send_message(http.clone(), |m| {
             m.add_file(std::path::Path::new(&img_name));
             m.embed(|e| {
-                e.title("Aktiivisimmat jäsenet");
-                e.description("Edellisen päivän lähetetyt viestit");
+                e.title("Eilisen aktiivisimmat jäsenet");
                 e.color(serenity::utils::Color::from_rgb(68, 82, 130));
                 e.image(format!("attachment://{}", img_name));
                 winners
@@ -103,7 +102,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
                             Ok(m) => {
                                 e.field(
                                     format!("Sijalla {}.", ranking),
-                                    format!("{}, {} viestiä ({:,1} %)", m, msg_count, msg_percent),
+                                    format!("{}, {} viestiä ({:.1} %)", m, msg_count, msg_percent),
                                     false,
                                 );
                             }
@@ -111,7 +110,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
                                 e.field(
                                     format!("Sijalla {}.", ranking),
                                     format!(
-                                        "Entinen jäsen, {} viestiä ({:,1} %)",
+                                        "Entinen jäsen, {} viestiä ({:.1} %)",
                                         msg_count, msg_percent
                                     ),
                                     false,
