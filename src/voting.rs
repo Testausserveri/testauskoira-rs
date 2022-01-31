@@ -360,7 +360,7 @@ async fn is_moderator(ctx: &Context, user: &User) -> bool {
 /// This function adds the vote then checks whether the goal is reached
 /// and then acts accordingly, either by deleting the message and then updating
 /// the announcement on the moderation channel or just by updating the announcement
-async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
+async fn handle_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
     if event.delete_votes == event.delete_votes_required {
@@ -372,22 +372,24 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
         .unwrap()
         == 0
     {
-        return;
-    }
-    let event = db.get_voting_event(message.id.0).await.unwrap();
-    if event.delete_votes == event.delete_votes_required {
-        let message = ctx
-            .http
-            .get_message(
-                event.suspect_message_channel_id as u64,
-                event.suspect_message_id as u64,
-            )
-            .await
-            .unwrap();
-        message.delete(&ctx.http).await.unwrap();
-        db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
-            .await
-            .unwrap();
+        db.remove_vote(event.vote_message_id, voter.id.0, 0)
+            .await.unwrap();
+    } else {
+        let event = db.get_voting_event(message.id.0).await.unwrap();
+        if event.delete_votes == event.delete_votes_required {
+            let message = ctx
+                .http
+                .get_message(
+                    event.suspect_message_channel_id as u64,
+                    event.suspect_message_id as u64,
+                    )
+                .await
+                .unwrap();
+            message.delete(&ctx.http).await.unwrap();
+            db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
+                .await
+                .unwrap();
+        }
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
@@ -398,7 +400,7 @@ async fn add_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
 /// the announcement on the moderation channel or just by updating the announcement
 //
 // NOTE: The ban actually only applies the "silenced" role upon the user
-async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
+async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
     if event.silence_votes == event.silence_votes_required {
@@ -410,24 +412,26 @@ async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
         .unwrap()
         == 0
     {
-        return;
-    }
-    let event = db.get_voting_event(message.id.0).await.unwrap();
-    if event.silence_votes == event.silence_votes_required {
-        let guild_id: u64 = env::var("GUILD_ID")
-            .expect("Expected GUILD_ID in .env")
-            .parse()
-            .expect("Invalid GUILD_ID provided");
-        let silence_role: u64 = env::var("SILENCED_ROLE_ID")
-            .expect("Expected SILENCED_ROLE_ID in .env")
-            .parse()
-            .expect("Invalid SILENCED_ROLE_ID provided");
-        let mut member = ctx
-            .http
-            .get_member(guild_id, event.suspect_id as u64)
-            .await
-            .unwrap();
-        member.add_role(&ctx.http, silence_role).await.unwrap();
+        db.remove_vote(event.vote_message_id, voter.id.0, 1)
+            .await.unwrap();
+    } else {
+        let event = db.get_voting_event(message.id.0).await.unwrap();
+        if event.silence_votes == event.silence_votes_required {
+            let guild_id: u64 = env::var("GUILD_ID")
+                .expect("Expected GUILD_ID in .env")
+                .parse()
+                .expect("Invalid GUILD_ID provided");
+            let silence_role: u64 = env::var("SILENCED_ROLE_ID")
+                .expect("Expected SILENCED_ROLE_ID in .env")
+                .parse()
+                .expect("Invalid SILENCED_ROLE_ID provided");
+            let mut member = ctx
+                .http
+                .get_member(guild_id, event.suspect_id as u64)
+                .await
+                .unwrap();
+            member.add_role(&ctx.http, silence_role).await.unwrap();
+        }
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
@@ -435,7 +439,7 @@ async fn add_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
 /// This function handles the press off the "abuse_button"
 /// If the vote-goal is reached, the user will be given a
 /// role that prevents them from further abusing the reporting feature
-async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
+async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     let db = ctx.get_db().await;
     let event = db.get_voting_event(message.id.0).await.unwrap();
     if event.block_reporter_votes == event.block_reporter_votes_required {
@@ -447,24 +451,26 @@ async fn add_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
         .unwrap()
         == 0
     {
-        return;
-    }
-    let event = db.get_voting_event(message.id.0).await.unwrap();
-    if event.block_reporter_votes == event.block_reporter_votes_required {
-        let guild_id: u64 = env::var("GUILD_ID")
-            .expect("Expected GUILD_ID in .env")
-            .parse()
-            .expect("Invalid GUILD_ID provided");
-        let abuse_role: u64 = env::var("NO_REPORTS_ROLE_ID")
-            .expect("Expected NO_REPORTS_ROLE_ID in .env")
-            .parse()
-            .expect("Invalid NO_REPORTS_ROLE_ID provided");
-        let mut member = ctx
-            .http
-            .get_member(guild_id, event.reporter_id as u64)
-            .await
-            .unwrap();
-        member.add_role(&ctx.http, abuse_role).await.unwrap();
+        db.remove_vote(event.vote_message_id, voter.id.0, 2)
+            .await.unwrap();
+    } else {
+        let event = db.get_voting_event(message.id.0).await.unwrap();
+        if event.block_reporter_votes == event.block_reporter_votes_required {
+            let guild_id: u64 = env::var("GUILD_ID")
+                .expect("Expected GUILD_ID in .env")
+                .parse()
+                .expect("Invalid GUILD_ID provided");
+            let abuse_role: u64 = env::var("NO_REPORTS_ROLE_ID")
+                .expect("Expected NO_REPORTS_ROLE_ID in .env")
+                .parse()
+                .expect("Invalid NO_REPORTS_ROLE_ID provided");
+            let mut member = ctx
+                .http
+                .get_member(guild_id, event.reporter_id as u64)
+                .await
+                .unwrap();
+            member.add_role(&ctx.http, abuse_role).await.unwrap();
+        }
     }
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
@@ -476,15 +482,15 @@ pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
         match component.data.custom_id.as_str() {
             "delete_button" => {
                 info!("Delete vote by {}", component.user.tag());
-                add_delete_vote(&ctx, component.user.clone(), &mut component.message).await;
+                handle_delete_vote(ctx, component.user.clone(), &mut component.message).await;
             }
             "ban_button" => {
                 info!("Ban vote by {}", component.user.tag());
-                add_silence_vote(&ctx, component.user.clone(), &mut component.message).await;
+                handle_silence_vote(ctx, component.user.clone(), &mut component.message).await;
             }
             "abuse_button" => {
                 info!("Abuse vote by {}", component.user.tag());
-                add_abuse_vote(&ctx, component.user.clone(), &mut component.message).await;
+                handle_abuse_vote(ctx, component.user.clone(), &mut component.message).await;
             }
             _ => {
                 debug!("Unknown interaction: {}", component.data.custom_id);

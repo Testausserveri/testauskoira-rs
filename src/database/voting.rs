@@ -184,4 +184,62 @@ impl Database {
             _ => Ok(0),
         }
     }
+
+    pub async fn remove_vote(
+        &self,
+        voting_message_id: u64,
+        voter_user_id: u64,
+        vote_type: i32,
+    ) -> Result<usize, anyhow::Error> {
+        let vote = NewVotingAction {
+            vote_type,
+            voter_user_id,
+            voting_message_id,
+        };
+        {
+            use crate::schema::VotingActions::dsl::*;
+            // FIXME: REALLY Q&D
+            if VotingActions
+                .filter(
+                    vote_type
+                        .eq(vote.vote_type)
+                        .and(voter_user_id.eq(vote.voter_user_id))
+                        .and(voting_message_id.eq(vote.voting_message_id)),
+                )
+                .load::<VotingAction>(&self.pool.get()?)?
+                .is_empty()
+            {
+                return Ok(0);
+            }
+            diesel::delete(crate::schema::VotingActions::table)
+                .filter(
+                    vote_type
+                        .eq(vote.vote_type)
+                        .and(voter_user_id.eq(vote.voter_user_id))
+                        .and(voting_message_id.eq(vote.voting_message_id)),
+                )
+                .execute(&self.pool.get()?)?;
+        }
+
+
+        use crate::schema::CouncilVotings::dsl::*;
+        match vote_type {
+            0 => Ok(
+                diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
+                    .set(delete_votes.eq(delete_votes - 1))
+                    .execute(&self.pool.get()?)?,
+            ),
+            1 => Ok(
+                diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
+                    .set(silence_votes.eq(silence_votes - 1))
+                    .execute(&self.pool.get()?)?,
+            ),
+            2 => Ok(
+                diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
+                    .set(block_reporter_votes.eq(block_reporter_votes - 1))
+                    .execute(&self.pool.get()?)?,
+            ),
+            _ => Ok(0),
+        }
+    }
 }
