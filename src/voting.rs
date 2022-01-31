@@ -47,7 +47,7 @@ fn generate_moderation_message(
     );
     let delete_voters = filter_votes(0, votes.clone());
     let silence_voters = filter_votes(1, votes.clone());
-    let block_reporter_voters = filter_votes(2, votes.clone());
+    let block_reporter_voters = filter_votes(2, votes);
     message.embed(|e| {
         e.color(serenity::utils::Color::RED);
         e.title("Viestistä on tehty ilmoitus!");
@@ -258,7 +258,7 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         return;
     }
 
-    let message = if is_moderator(&ctx, &interaction.user).await {
+    let message = if is_moderator(ctx, &interaction.user).await {
         format!(
             "Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>",
             moderation_channel_id
