@@ -42,6 +42,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
     let db = db.as_ref();
     let winners = db.get_most_active(5, offset).await.unwrap();
     let total_msgs = db.get_total_daily_messages(offset).await.unwrap();
+    let messages_average = db.get_total_message_average(offset).await.unwrap();
 
     let channel = ChannelId::from(
         env::var("AWARD_CHANNEL_ID")
@@ -91,6 +92,7 @@ pub async fn display_winner(http: Arc<Http>, db: impl AsRef<Database>, offset: i
             m.add_file(std::path::Path::new(&img_name));
             m.embed(|e| {
                 e.title("Eilisen aktiivisimmat jäsenet");
+                e.description(format!("Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä", &total_msgs, total_msgs as f32 / messages_average * 100f32));
                 e.color(serenity::utils::Color::from_rgb(68, 82, 130));
                 e.image(format!("attachment://{}", img_name));
                 winners

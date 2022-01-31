@@ -81,4 +81,19 @@ impl Database {
             .collect();
         Ok(members)
     }
+
+    pub async fn get_total_message_average(&self, offset: i32) -> Result<f32, anyhow::Error> {
+        let curdate = chrono::Local::today().naive_local() - chrono::Duration::days(offset.into());
+        use crate::schema::messages_day_stat::dsl::*;
+
+        let mut res = messages_day_stat
+            .filter(date.lt(curdate))
+            .group_by(date)
+            .select(diesel::dsl::sum(message_count))
+            .load::<Option<i64>>(&self.pool.get()?)?;
+
+        res.retain(|x| x.is_some());
+        // Haskell :hear_eyes:
+        Ok(res.iter().fold(0, |acc, x| acc + x.unwrap()) as f32 / res.len() as f32)
+    }
 }
