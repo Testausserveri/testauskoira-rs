@@ -33,6 +33,7 @@ pub struct CouncilVoting {
     pub block_reporter_votes: i32,
     pub block_reporter_votes_required: i32,
     pub moderators_online: i32,
+    pub useless_clicks: i64,
 }
 
 use crate::schema::CouncilVotings;
@@ -54,6 +55,7 @@ pub struct NewCouncilVoting {
     pub block_reporter_votes: i32,
     pub block_reporter_votes_required: i32,
     pub moderators_online: i32,
+    pub useless_clicks: i64,
 }
 
 #[derive(Queryable, Clone, Debug)]

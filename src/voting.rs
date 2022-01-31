@@ -151,7 +151,11 @@ fn generate_moderation_message(
                     b.url(message_link)
                 });
             }
-            r
+            r.create_button(|b| {
+                b.label(format!("{} klikkausta tuhlattu", voting.useless_clicks));
+                b.style(ButtonStyle::Success);
+                b.custom_id("useless_button")
+            })
         })
     });
 }
@@ -475,6 +479,12 @@ async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
+async fn handle_useless_button(ctx: &Context, message: &mut Message) {
+    let db = ctx.get_db().await;
+    db.add_useless_click(message.id.0).await.unwrap();
+    update_voting_message(ctx, message.id.0).await;
+}
+
 /// This function handles the vote-interactions and the report interaction and
 /// calls the appropriate functions for them (logging stuff in the logs)
 pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
@@ -491,6 +501,9 @@ pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
             "abuse_button" => {
                 info!("Abuse vote by {}", component.user.tag());
                 handle_abuse_vote(ctx, component.user.clone(), &mut component.message).await;
+            }
+            "useless_button" => {
+                handle_useless_button(ctx, &mut component.message).await;
             }
             _ => {
                 debug!("Unknown interaction: {}", component.data.custom_id);
