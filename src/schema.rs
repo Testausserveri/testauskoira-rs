@@ -17,6 +17,7 @@ table! {
         block_reporter_votes -> Integer,
         block_reporter_votes_required -> Integer,
         moderators_online -> Integer,
+        useless_clicks -> Bigint,
     }
 }
 

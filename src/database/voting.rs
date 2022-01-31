@@ -27,6 +27,7 @@ impl Database {
             block_reporter_votes: 0,
             block_reporter_votes_required: (mods_online as f32).sqrt().clamp(1., 3.).round() as i32,
             moderators_online: mods_online,
+            useless_clicks: 0,
         };
         Ok(diesel::insert_into(crate::schema::CouncilVotings::table)
             .values(&new_voting)
@@ -241,5 +242,12 @@ impl Database {
             ),
             _ => Ok(0),
         }
+    }
+
+    pub async fn add_useless_click(&self, message_id: u64) -> Result<usize, anyhow::Error> {
+        use crate::schema::CouncilVotings::dsl::*;
+        Ok(diesel::update(CouncilVotings.filter(vote_message_id.eq(message_id)))
+            .set(useless_clicks.eq(useless_clicks + 1))
+            .execute(&self.pool.get()?)?)
     }
 }
