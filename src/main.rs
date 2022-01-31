@@ -220,6 +220,10 @@ impl EventHandler for Handler {
                     .unwrap();
             }
         }
+        if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
+            let status_channel_id: ChannelId = s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
+            status_channel_id.send_message(&ctx.http, |m| m.content("Testauskoira on herännyt ja valmiina toimintaan!")).await.unwrap();
+        };
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
