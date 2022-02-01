@@ -17,6 +17,7 @@ use std::{collections::HashSet, env, sync::Arc};
 use clokwerk::Scheduler;
 use commands::owner::*;
 use database::Database;
+use voting::PendingEdits;
 use extensions::*;
 use serenity::{
     async_trait,
@@ -346,6 +347,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let database = Database::new().await;
+    let pending_edits = PendingEdits::new();
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     let application_id = env::var("APPLICATION_ID")
@@ -419,6 +421,7 @@ async fn main() {
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<Database>(database);
         data.insert::<BlacklistRegexes>(Arc::new(Mutex::new(blacklist)));
+        data.insert::<PendingEdits>(Arc::new(Mutex::new(pending_edits)));
     }
 
     let shard_manager = client.shard_manager.clone();

@@ -8,6 +8,7 @@ use serenity::{
         InteractionApplicationCommandCallbackDataFlags,
         InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
     },
+    prelude::TypeMapKey,
 };
 
 use crate::{
@@ -16,7 +17,35 @@ use crate::{
     models::{CouncilVoting, SuspectMessageEdit, VotingAction},
     Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
     message_component::MessageComponentInteraction,
+    Mutex, Arc,
 };
+
+pub struct PendingEdits {
+    edits: Vec<u64>,
+}
+
+impl TypeMapKey for PendingEdits {
+    type Value = Arc<Mutex<PendingEdits>>;
+}
+
+impl PendingEdits {
+    pub fn new() -> PendingEdits {
+        let edits = Vec::new();
+        Self { edits }
+    }
+
+    pub fn add(&mut self, message_id: u64) {
+        self.edits.push(message_id);
+    }
+
+    pub fn remove(&mut self, message_id: u64) {
+        self.edits.retain(|x| *x != message_id);
+    }
+
+    pub fn contains(&self, message_id: u64) -> bool {
+        self.edits.contains(&message_id)
+    }
+}
 
 async fn is_reported(ctx: &Context, message_id: u64) -> bool {
     let db = ctx.get_db().await;
@@ -482,6 +511,7 @@ async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
 
 async fn handle_useless_button(ctx: &Context, component: &mut MessageComponentInteraction) {
     let db = ctx.get_db().await;
+    let pending_edits = ctx.get_pending_edits().await;
     db.add_useless_click(component.message.id.0).await.unwrap();
     component
         .create_interaction_response(&ctx.http, |r| {
@@ -489,7 +519,11 @@ async fn handle_useless_button(ctx: &Context, component: &mut MessageComponentIn
         })
     .await
     .unwrap();
-    update_voting_message(ctx, component.message.id.0).await;
+    if !pending_edits.lock().await.contains(component.message.id.0) {
+        pending_edits.lock().await.add(component.message.id.0);
+        update_voting_message(ctx, component.message.id.0).await;
+        pending_edits.lock().await.remove(component.message.id.0);
+    }
 }
 
 /// This function handles the vote-interactions and the report interaction and
