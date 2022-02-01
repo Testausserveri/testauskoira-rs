@@ -15,6 +15,7 @@ use crate::{
     extensions::*,
     models::{CouncilVoting, SuspectMessageEdit, VotingAction},
     Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
+    message_component::MessageComponentInteraction,
 };
 
 async fn is_reported(ctx: &Context, message_id: u64) -> bool {
@@ -479,10 +480,16 @@ async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
     update_voting_message(ctx, event.vote_message_id as u64).await;
 }
 
-async fn handle_useless_button(ctx: &Context, message: &mut Message) {
+async fn handle_useless_button(ctx: &Context, component: &mut MessageComponentInteraction) {
     let db = ctx.get_db().await;
-    db.add_useless_click(message.id.0).await.unwrap();
-    update_voting_message(ctx, message.id.0).await;
+    db.add_useless_click(component.message.id.0).await.unwrap();
+    component
+        .create_interaction_response(&ctx.http, |r| {
+            r.kind(DeferredUpdateMessage)
+        })
+    .await
+    .unwrap();
+    update_voting_message(ctx, component.message.id.0).await;
 }
 
 /// This function handles the vote-interactions and the report interaction and
@@ -503,7 +510,8 @@ pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
                 handle_abuse_vote(ctx, component.user.clone(), &mut component.message).await;
             }
             "useless_button" => {
-                handle_useless_button(ctx, &mut component.message).await;
+                handle_useless_button(ctx, &mut component).await;
+                return;
             }
             _ => {
                 debug!("Unknown interaction: {}", component.data.custom_id);
@@ -512,7 +520,6 @@ pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
         }
         component
             .create_interaction_response(&ctx.http, |r| {
-                r.interaction_response_data(|d| d.content("Ilmiannettu"));
                 r.kind(DeferredUpdateMessage)
             })
             .await
