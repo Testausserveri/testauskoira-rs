@@ -19,15 +19,17 @@ CMD ["bash", "entrypoint.sh"]
 # Final image
 FROM debian:latest
 
+RUN apt update
+
+RUN apt-get install default-mysql-client --yes
+
 WORKDIR /app
 
 COPY --from=build /usr/local/cargo/bin/diesel /app/
 
 COPY --from=build /usr/local/cargo/release/testauskoira-rs /app/
 
-RUN apt-get update
-
-RUN apt-get install sqlite3 --yes
+COPY migrations /app/migrations
 
 COPY entrypoint.sh ./
 
