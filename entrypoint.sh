@@ -1,7 +1,7 @@
 #!/bin/sh
 while [ 1 ];
 do
-    /usr/local/cargo/bin/diesel database setup && break;
+    /app/diesel database setup && break;
 done
-/usr/local/cargo/bin/diesel migration run
-./target/release/testauskoira-rs
+/app/diesel migration run
+/app/testauskoira-rs
