@@ -4,9 +4,9 @@ WORKDIR /app
 
 COPY Cargo* ./
 
-COPY src/main.rs ./src/
-
 RUN cargo fetch 
+
+COPY src/main.rs ./src/
 
 COPY . .
 
@@ -14,12 +14,10 @@ RUN cargo build -j 2 --release --target-dir /usr/local/cargo
 
 RUN cargo install -j 2 diesel_cli --no-default-features --features "mysql"
 
-CMD ["bash", "entrypoint.sh"]
-
 # Final image
-FROM debian:latest
+FROM debian:slim
 
-RUN apt update
+RUN apt-get update
 
 RUN apt-get install default-mysql-client --yes
 
