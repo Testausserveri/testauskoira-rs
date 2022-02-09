@@ -4,9 +4,9 @@ WORKDIR /app
 
 COPY Cargo* ./
 
-RUN cargo fetch 
-
 COPY src/main.rs ./src/
+
+RUN cargo fetch 
 
 COPY . .
 
@@ -15,7 +15,7 @@ RUN cargo build -j 2 --release --target-dir /usr/local/cargo
 RUN cargo install -j 2 diesel_cli --no-default-features --features "mysql"
 
 # Final image
-FROM debian:slim
+FROM debian:bullseye-slim
 
 RUN apt-get update
 
