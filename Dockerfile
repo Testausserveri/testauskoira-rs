@@ -31,8 +31,6 @@ COPY --from=build /usr/local/cargo/release/testauskoira-rs /app/
 
 COPY migrations /app/migrations
 
-RUN apt-get update
-
 COPY entrypoint.sh ./
 
 CMD ["bash", "entrypoint.sh"] 
