@@ -135,7 +135,11 @@ async fn roll_giveaway(
         .await?;
     let candidates = get_reacters(&http, &message, reaction.clone())
         .await
-        .map(|v| v.into_iter().filter(|x| !x.bot && !excluded.contains(&x.id.0)).collect::<Vec<User>>())?;
+        .map(|v| {
+            v.into_iter()
+                .filter(|x| !x.bot && !excluded.contains(&x.id.0))
+                .collect::<Vec<User>>()
+        })?;
     let winners = roll_winners(&candidates, giveaway.max_winners).await;
     let winners_string = if winners.is_empty() {
         "Nobody...".to_string()
@@ -421,14 +425,20 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
             let giveaway = db.get_giveaway(giveaway_id).await.unwrap();
 
             let excluded = if !allow_past {
-                Some(db.get_giveaway_winners(giveaway.id)
-                .await
-                .map(|x| x.into_iter().map(|x| x.user_id).collect())
-                .unwrap())
-            } else { None };
+                Some(
+                    db.get_giveaway_winners(giveaway.id)
+                        .await
+                        .map(|x| x.into_iter().map(|x| x.user_id).collect())
+                        .unwrap(),
+                )
+            } else {
+                None
+            };
 
             if !allow_past {
-                db.set_giveaway_winners_rerolled(giveaway_id, excluded.as_ref().unwrap()).await.unwrap();
+                db.set_giveaway_winners_rerolled(giveaway_id, excluded.as_ref().unwrap())
+                    .await
+                    .unwrap();
             }
 
             roll_giveaway(
@@ -436,7 +446,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
                 &db,
                 &giveaway,
                 ReactionType::from(giveaway_emoji),
-                excluded
+                excluded,
             )
             .await
             .unwrap();

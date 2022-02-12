@@ -3,6 +3,8 @@ pub mod giveaway;
 pub mod message_logging;
 pub mod voting;
 
+use std::sync::Arc;
+
 use diesel::{
     mysql::MysqlConnection,
     r2d2::{ConnectionManager, Pool},
@@ -14,7 +16,7 @@ pub struct Database {
 }
 
 impl TypeMapKey for Database {
-    type Value = Database;
+    type Value = Arc<Database>;
 }
 
 impl AsRef<Database> for Database {

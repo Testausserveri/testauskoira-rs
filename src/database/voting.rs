@@ -34,18 +34,6 @@ impl Database {
             .execute(&self.pool.get()?)?)
     }
 
-    pub async fn add_voting_message_id(
-        &self,
-        suspect_message: u64,
-        voting_message: u64,
-    ) -> Result<usize, anyhow::Error> {
-        use crate::schema::CouncilVotings::dsl::*;
-        Ok(diesel::update(crate::schema::CouncilVotings::table)
-            .filter(suspect_message_id.eq(suspect_message))
-            .set(vote_message_id.eq(voting_message))
-            .execute(&self.pool.get()?)?)
-    }
-
     pub async fn get_voting_event(
         &self,
         voting_message_id: u64,
@@ -222,7 +210,6 @@ impl Database {
                 .execute(&self.pool.get()?)?;
         }
 
-
         use crate::schema::CouncilVotings::dsl::*;
         match vote_type {
             0 => Ok(
@@ -246,8 +233,10 @@ impl Database {
 
     pub async fn add_useless_click(&self, message_id: u64) -> Result<usize, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
-        Ok(diesel::update(CouncilVotings.filter(vote_message_id.eq(message_id)))
-            .set(useless_clicks.eq(useless_clicks + 1))
-            .execute(&self.pool.get()?)?)
+        Ok(
+            diesel::update(CouncilVotings.filter(vote_message_id.eq(message_id)))
+                .set(useless_clicks.eq(useless_clicks + 1))
+                .execute(&self.pool.get()?)?,
+        )
     }
 }

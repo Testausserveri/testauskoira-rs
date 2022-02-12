@@ -4,7 +4,7 @@ use serenity::{
     prelude::*,
 };
 
-use crate::{extensions::*, utils::winner_showcase::display_winner, ShardManagerContainer};
+use crate::{events::activity_award::display_winner, extensions::*, ShardManagerContainer};
 
 #[command]
 #[owners_only]
@@ -30,6 +30,7 @@ async fn award_ceremony(ctx: &Context, _msg: &Message, mut args: Args) -> Comman
         _ => 0,
     };
     let db = ctx.get_db().await;
-    display_winner(ctx.http.to_owned(), db.to_owned(), offset).await;
+    let http = ctx.http.to_owned();
+    display_winner(http, db, offset).await;
     Ok(())
 }

@@ -1,11 +1,10 @@
-pub mod commands;
-pub mod database;
-pub mod extensions;
-pub mod models;
-pub mod scheduled;
-pub mod schema;
-pub mod utils;
-pub mod voting;
+mod commands;
+mod database;
+mod events;
+mod extensions;
+mod models;
+mod schema;
+mod voting;
 
 #[macro_use]
 extern crate tracing;
@@ -14,10 +13,9 @@ extern crate diesel;
 
 use std::{collections::HashSet, env, sync::Arc};
 
-use clokwerk::Scheduler;
+use clokwerk::AsyncScheduler;
 use commands::owner::*;
 use database::Database;
-use voting::PendingEdits;
 use extensions::*;
 use serenity::{
     async_trait,
@@ -32,6 +30,7 @@ use serenity::{
     },
     prelude::*,
 };
+use voting::PendingEdits;
 
 pub struct ShardManagerContainer;
 
@@ -100,7 +99,7 @@ impl EventHandler for Handler {
                                         .description("Arpajaisten voittajien lukumäärä")
                                         .kind(ApplicationCommandOptionType::Integer)
                                 })
-                                .create_sub_option(|subopt| {
+                                        .create_sub_option(|subopt| {
                                     subopt
                                         .name("prize")
                                         .description("Arpajaisten palkinto")
@@ -222,8 +221,14 @@ impl EventHandler for Handler {
             }
         }
         if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
-            let status_channel_id: ChannelId = s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
-            status_channel_id.send_message(&ctx.http, |m| m.content("Testauskoira on herännyt ja valmiina toimintaan!")).await.unwrap();
+            let status_channel_id: ChannelId =
+                s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
+            status_channel_id
+                .send_message(&ctx.http, |m| {
+                    m.content("Testauskoira on herännyt ja valmiina toimintaan!")
+                })
+                .await
+                .unwrap();
         };
     }
 
@@ -346,7 +351,7 @@ async fn main() {
 
     tracing_subscriber::fmt::init();
 
-    let database = Database::new().await;
+    let database = Arc::new(Database::new().await);
     let pending_edits = PendingEdits::new();
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
@@ -419,36 +424,30 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<Database>(database);
+        data.insert::<Database>(database.clone());
         data.insert::<BlacklistRegexes>(Arc::new(Mutex::new(blacklist)));
         data.insert::<PendingEdits>(Arc::new(Mutex::new(pending_edits)));
     }
 
     let shard_manager = client.shard_manager.clone();
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
     let http = client.cache_and_http.http.clone();
-    let db = Arc::new(client.get_db().await);
 
-    let mut scheduler = Scheduler::with_tz(chrono::Local);
+    let mut scheduler = AsyncScheduler::with_tz(chrono::Local);
 
-    for func in crate::scheduled::SETUP_FUNCTIONS {
-        func(
-            &mut scheduler,
-            runtime.handle().to_owned(),
-            http.clone(),
-            db.clone(),
-        );
-    }
+    events::setup_schedulers(&mut scheduler, http.clone(), database.clone());
 
-    let thread_handle = scheduler.watch_thread(std::time::Duration::from_millis(1000));
+    tokio::spawn(async move {
+        loop {
+            scheduler.run_pending().await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    });
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
-        runtime.shutdown_background();
-        thread_handle.stop();
         shard_manager.lock().await.shutdown_all().await;
     });
 

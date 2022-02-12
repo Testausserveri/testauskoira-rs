@@ -14,10 +14,9 @@ use serenity::{
 use crate::{
     env,
     extensions::*,
-    models::{CouncilVoting, SuspectMessageEdit, VotingAction},
-    Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, User,
     message_component::MessageComponentInteraction,
-    Mutex, Arc,
+    models::{CouncilVoting, SuspectMessageEdit, VotingAction},
+    Arc, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, Mutex, User,
 };
 
 pub struct PendingEdits {
@@ -407,7 +406,8 @@ async fn handle_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
         == 0
     {
         db.remove_vote(event.vote_message_id, voter.id.0, 0)
-            .await.unwrap();
+            .await
+            .unwrap();
     } else {
         let event = db.get_voting_event(message.id.0).await.unwrap();
         if event.delete_votes == event.delete_votes_required {
@@ -416,7 +416,7 @@ async fn handle_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
                 .get_message(
                     event.suspect_message_channel_id as u64,
                     event.suspect_message_id as u64,
-                    )
+                )
                 .await
                 .unwrap();
             message.delete(&ctx.http).await.unwrap();
@@ -447,7 +447,8 @@ async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) 
         == 0
     {
         db.remove_vote(event.vote_message_id, voter.id.0, 1)
-            .await.unwrap();
+            .await
+            .unwrap();
     } else {
         let event = db.get_voting_event(message.id.0).await.unwrap();
         if event.silence_votes == event.silence_votes_required {
@@ -491,7 +492,8 @@ async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
         == 0
     {
         db.remove_vote(event.vote_message_id, voter.id.0, 2)
-            .await.unwrap();
+            .await
+            .unwrap();
     } else {
         let event = db.get_voting_event(message.id.0).await.unwrap();
         if event.block_reporter_votes == event.block_reporter_votes_required {
@@ -519,11 +521,9 @@ async fn handle_useless_button(ctx: &Context, component: &mut MessageComponentIn
     let pending_edits = ctx.get_pending_edits().await;
     db.add_useless_click(component.message.id.0).await.unwrap();
     component
-        .create_interaction_response(&ctx.http, |r| {
-            r.kind(DeferredUpdateMessage)
-        })
-    .await
-    .unwrap();
+        .create_interaction_response(&ctx.http, |r| r.kind(DeferredUpdateMessage))
+        .await
+        .unwrap();
     if !pending_edits.lock().await.contains(component.message.id.0) {
         pending_edits.lock().await.add(component.message.id.0);
         update_voting_message(ctx, component.message.id.0).await;
@@ -558,9 +558,7 @@ pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
             }
         }
         component
-            .create_interaction_response(&ctx.http, |r| {
-                r.kind(DeferredUpdateMessage)
-            })
+            .create_interaction_response(&ctx.http, |r| r.kind(DeferredUpdateMessage))
             .await
             .unwrap();
     }

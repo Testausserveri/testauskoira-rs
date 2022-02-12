@@ -5,11 +5,13 @@ use serenity::{
     },
 };
 
-use crate::{database::Database, PartialChannel, PartialMember, Role, User, PendingEdits, Arc, Mutex};
+use crate::{
+    database::Database, Arc, Mutex, PartialChannel, PartialMember, PendingEdits, Role, User,
+};
 
 #[async_trait]
 pub trait ClientContextExt {
-    async fn get_db(&self) -> Database;
+    async fn get_db(&self) -> Arc<Database>;
     async fn get_pending_edits(&self) -> Arc<Mutex<PendingEdits>>;
 }
 
@@ -29,30 +31,26 @@ pub trait ApplicationCommandInteractionDataOptionVecExt {
 
 #[async_trait]
 impl ClientContextExt for client::Context {
-    async fn get_db(&self) -> Database {
+    async fn get_db(&self) -> Arc<Database> {
         self.data.read().await.get::<Database>().unwrap().clone()
     }
 
     async fn get_pending_edits(&self) -> Arc<Mutex<PendingEdits>> {
         let data = self.data.read().await;
-        let pending_edits = data
-            .get::<PendingEdits>()
-            .unwrap();
+        let pending_edits = data.get::<PendingEdits>().unwrap();
         pending_edits.to_owned()
     }
 }
 
 #[async_trait]
 impl ClientContextExt for client::Client {
-    async fn get_db(&self) -> Database {
+    async fn get_db(&self) -> Arc<Database> {
         self.data.read().await.get::<Database>().unwrap().clone()
     }
 
     async fn get_pending_edits(&self) -> Arc<Mutex<PendingEdits>> {
         let data = self.data.read().await;
-        let pending_edits = data
-            .get::<PendingEdits>()
-            .unwrap();
+        let pending_edits = data.get::<PendingEdits>().unwrap();
         pending_edits.to_owned()
     }
 }
