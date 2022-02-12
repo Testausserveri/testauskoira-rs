@@ -21,7 +21,7 @@ FROM debian:latest
 
 RUN apt update
 
-RUN apt-get install default-mysql-client --yes
+RUN apt-get install default-mysql-client ca-certificates --yes
 
 WORKDIR /app
 
