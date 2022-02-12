@@ -72,61 +72,114 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
         .collect::<Vec<_>>()
         .await;
 
-    let img_name = build_award_image(&winners[0].0.as_ref().unwrap().face())
-        .await
-        .unwrap();
+    match &winners[0].0.as_ref() {
+        Ok(winner) => {
+            let img_name = build_award_image(&winner.face()).await.unwrap();
 
-    give_award_role(
-        &http,
-        db.clone(),
-        winners[0].0.as_ref().unwrap().user.id.0,
-        offset,
-    )
-    .await;
+            give_award_role(
+                &http,
+                db.clone(),
+                winners[0].0.as_ref().unwrap().user.id.0,
+                offset,
+            )
+            .await;
 
-    channel
-        .send_message(&http, |m| {
-            m.add_file(std::path::Path::new(&img_name));
-            m.embed(|e| {
-                e.title("Eilisen aktiivisimmat jäsenet");
-                e.description(format!(
-                    "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
-                    &total_msgs,
-                    total_msgs as f32 / messages_average * 100f32
-                ));
-                e.color(serenity::utils::Color::from_rgb(68, 82, 130));
-                e.image(format!("attachment://{}", img_name));
-                winners
-                    .iter()
-                    .enumerate()
-                    .for_each(|(ranking, (member, msg_count))| {
-                        let msg_percent = msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
-                        match member {
-                            Ok(m) => {
-                                e.field(
-                                    format!("Sijalla {}.", ranking),
-                                    format!("{}, {} viestiä ({:.1} %)", m, msg_count, msg_percent),
-                                    false,
-                                );
-                            }
-                            Err(err) => {
-                                e.field(
-                                    format!("Sijalla {}.", ranking),
-                                    format!(
-                                        "Entinen jäsen, {} viestiä ({:.1} %)",
-                                        msg_count, msg_percent
-                                    ),
-                                    false,
-                                );
-                                error!("{}", err);
-                            }
-                        };
-                    });
-                e
-            })
-        })
-        .await
-        .unwrap();
+            channel
+                .send_message(&http, |m| {
+                    m.add_file(std::path::Path::new(&img_name));
+                    m.embed(|e| {
+                        e.title("Eilisen aktiivisimmat jäsenet");
+                        e.description(format!(
+                            "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
+                            &total_msgs,
+                            total_msgs as f32 / messages_average * 100f32
+                        ));
+                        e.color(serenity::utils::Color::from_rgb(68, 82, 130));
+                        e.image(format!("attachment://{}", img_name));
+                        winners
+                            .iter()
+                            .enumerate()
+                            .for_each(|(ranking, (member, msg_count))| {
+                                let msg_percent =
+                                    msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
+                                match member {
+                                    Ok(m) => {
+                                        e.field(
+                                            format!("Sijalla {}.", ranking),
+                                            format!(
+                                                "{}, {} viestiä ({:.1} %)",
+                                                m, msg_count, msg_percent
+                                            ),
+                                            false,
+                                        );
+                                    }
+                                    Err(err) => {
+                                        e.field(
+                                            format!("Sijalla {}.", ranking),
+                                            format!(
+                                                "Entinen jäsen, {} viestiä ({:.1} %)",
+                                                msg_count, msg_percent
+                                            ),
+                                            false,
+                                        );
+                                        error!("{}", err);
+                                    }
+                                };
+                            });
+                        e
+                    })
+                })
+                .await
+                .unwrap();
+        }
+        Err(_) => {
+            channel
+                .send_message(&http, |m| {
+                    m.embed(|e| {
+                        e.title("Eilisen aktiivisimmat jäsenet");
+                        e.description(format!(
+                            "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
+                            &total_msgs,
+                            total_msgs as f32 / messages_average * 100f32
+                        ));
+                        e.color(serenity::utils::Color::from_rgb(68, 82, 130));
+                        winners
+                            .iter()
+                            .enumerate()
+                            .for_each(|(ranking, (member, msg_count))| {
+                                let msg_percent =
+                                    msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
+                                match member {
+                                    Ok(m) => {
+                                        e.field(
+                                            format!("Sijalla {}.", ranking),
+                                            format!(
+                                                "{}, {} viestiä ({:.1} %)",
+                                                m, msg_count, msg_percent
+                                            ),
+                                            false,
+                                        );
+                                    }
+                                    Err(err) => {
+                                        e.field(
+                                            format!("Sijalla {}.", ranking),
+                                            format!(
+                                                "Entinen jäsen, {} viestiä ({:.1} %)",
+                                                msg_count, msg_percent
+                                            ),
+                                            false,
+                                        );
+                                        error!("{}", err);
+                                    }
+                                };
+                            });
+                        e
+                    })
+                })
+                .await
+                .unwrap();
+        }
+    };
 }
 
 pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
