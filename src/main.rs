@@ -327,8 +327,18 @@ impl EventHandler for Handler {
         voting::handle_delete(&ctx, message_id).await;
     }
 
-    async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, member: Member) {
+    async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, mut member: Member) {
         info!("{} joined", member.user);
+        if let Ok(is_silenced) = ctx.get_db().await.is_silenced(member.user.id.0).await {
+            if is_silenced {
+                info!("Adding silenced role to user {}", member.user);
+                let silence_role = env::var("SILENCED_ROLE_ID")
+                    .expect("Expected SILENCED_ROLE_ID in .env")
+                    .parse::<u64>()
+                    .expect("Invalid SILENCED_ROLE_ID");
+                member.add_role(&ctx.http, silence_role).await.unwrap();
+            }
+        }
         let member_role = env::var("MEMBER_ROLE_ID")
             .expect("member role id not found in $MEMBER_ROLE_ID")
             .parse::<u64>()

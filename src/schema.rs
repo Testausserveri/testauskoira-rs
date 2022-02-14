@@ -60,6 +60,13 @@ table! {
 }
 
 table! {
+    SilencedMembers (id) {
+        id -> Integer,
+        user_id -> Unsigned<Bigint>,
+    }
+}
+
+table! {
     SuspectMessageEdits (id) {
         id -> Integer,
         voting_message_id -> Unsigned<Bigint>,
@@ -86,6 +93,7 @@ allow_tables_to_appear_in_same_query!(
     Giveaways,
     GiveawayWinners,
     messages_day_stat,
+    SilencedMembers,
     SuspectMessageEdits,
     VotingActions,
 );

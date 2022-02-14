@@ -239,4 +239,21 @@ impl Database {
                 .execute(&self.pool.get()?)?,
         )
     }
+
+    pub async fn is_silenced(&self, userid: u64) -> Result<bool, anyhow::Error> {
+        use crate::schema::SilencedMembers::dsl::*;
+        Ok(SilencedMembers
+            .filter(user_id.eq(userid))
+            .select(id)
+            .first::<i32>(&self.pool.get()?)
+            .optional()?
+            .is_some())
+    }
+
+    pub async fn silence_user(&self, userid: u64) -> Result<usize, anyhow::Error> {
+        let new_silence = NewSilencedMember { user_id: userid };
+        Ok(diesel::insert_into(crate::schema::SilencedMembers::table)
+            .values(&new_silence)
+            .execute(&self.pool.get()?)?)
+    }
 }

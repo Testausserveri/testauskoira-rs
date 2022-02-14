@@ -152,3 +152,17 @@ pub struct NewAwardWinner {
     pub user_id: u64,
     pub date: chrono::NaiveDate,
 }
+
+#[derive(Queryable)]
+pub struct SilencedMember {
+    pub id: i32,
+    pub user_id: u64,
+}
+
+use crate::schema::SilencedMembers;
+
+#[derive(Insertable)]
+#[table_name = "SilencedMembers"]
+pub struct NewSilencedMember {
+    pub user_id: u64,
+}
