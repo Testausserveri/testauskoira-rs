@@ -1,4 +1,11 @@
 #![allow(non_snake_case)]
+table! {
+    AwardWinners (id) {
+        id -> Integer,
+        user_id -> Unsigned<Bigint>,
+        date -> Date,
+    }
+}
 
 table! {
     CouncilVotings (id) {
@@ -74,6 +81,7 @@ table! {
 joinable!(GiveawayWinners -> Giveaways (giveaway_id));
 
 allow_tables_to_appear_in_same_query!(
+    AwardWinners,
     CouncilVotings,
     Giveaways,
     GiveawayWinners,

@@ -5,8 +5,7 @@ use serenity::{http::client::Http, model::id::ChannelId};
 use tracing::error;
 
 use crate::database::Database;
-
-async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64, offset: i32) {
+async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     let award_role_id: u64 = env::var("AWARD_ROLE_ID")
         .expect("No AWARD_ROLE_ID in .env")
         .parse()
@@ -17,29 +16,14 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64, offset: i3
         .parse()
         .expect("Invalid GUILD_ID provided");
 
+    if let Ok(previous_winner) = db.get_last_winner().await {
+        if let Ok(mut member) = http.get_member(guild_id, previous_winner).await {
+            member.remove_role(http, award_role_id).await.ok();
+        }
+    }
     let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
     winner_member.add_role(http, award_role_id).await.unwrap();
-    let yesterdays_competition = db.get_most_active(1, offset + 1).await.unwrap();
-    if yesterdays_competition.is_empty() {
-        return;
-    }
-    let previous_winner = yesterdays_competition[0].0;
-    if previous_winner == winner {
-        return;
-    }
-    let mut previous_winner_member = http.get_member(guild_id, previous_winner).await.unwrap();
-    if (previous_winner_member
-        .remove_role(http, award_role_id)
-        .await)
-        .is_ok()
-    {
-        info!(
-            "Rooli poistettu edelliseltä voittajalta {}",
-            previous_winner
-        );
-    } else {
-        info!("Ei aiempaa voittajaa");
-    }
+    db.new_winner(winner).await.ok();
 }
 
 pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
@@ -76,13 +60,7 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
         Ok(winner) => {
             let img_name = build_award_image(&winner.face()).await.unwrap();
 
-            give_award_role(
-                &http,
-                db.clone(),
-                winners[0].0.as_ref().unwrap().user.id.0,
-                offset,
-            )
-            .await;
+            give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
 
             channel
                 .send_message(&http, |m| {

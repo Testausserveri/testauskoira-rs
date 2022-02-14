@@ -136,3 +136,19 @@ pub struct NewGiveawayWinner {
     pub giveaway_id: i64,
     pub user_id: u64,
 }
+
+#[derive(Queryable)]
+pub struct AwardWinner {
+    pub id: i32,
+    pub user_id: u64,
+    pub date: chrono::NaiveDate,
+}
+
+use crate::schema::AwardWinners;
+
+#[derive(Insertable)]
+#[table_name = "AwardWinners"]
+pub struct NewAwardWinner {
+    pub user_id: u64,
+    pub date: chrono::NaiveDate,
+}
