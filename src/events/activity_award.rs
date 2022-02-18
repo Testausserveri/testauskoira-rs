@@ -19,7 +19,11 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     if let Ok(previous_winner) = db.get_last_winner().await {
         if let Ok(mut member) = http.get_member(guild_id, previous_winner).await {
             member.remove_role(http, award_role_id).await.ok();
+        } else {
+            info!("Cannot get the member info of the previous winner");
         }
+    } else {
+        info!("No previous winner found");
     }
     let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
     winner_member.add_role(http, award_role_id).await.unwrap();
