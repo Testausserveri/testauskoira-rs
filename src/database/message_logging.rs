@@ -101,7 +101,7 @@ impl Database {
     pub async fn get_last_winner(&self) -> Result<u64, anyhow::Error> {
         use crate::schema::AwardWinners::dsl::*;
         Ok(AwardWinners
-            .order_by(date)
+            .order_by(date.desc())
             .select(user_id)
             .first(&self.pool.get()?)?)
     }
