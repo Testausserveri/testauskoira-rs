@@ -33,7 +33,7 @@ async fn ensure_offset_map(ctx: &Context) {
 }
 
 fn generate_list_components(offset: i64, giveaways: i64) -> CreateComponents {
-    let mut c = CreateComponents { 0: Vec::new() };
+    let mut c = CreateComponents(Vec::new());
 
     c.create_action_row(|r| {
         r.create_button(|b| {
@@ -63,10 +63,10 @@ async fn generate_list_embeds(db: &Database, offset: i64) -> Vec<CreateEmbed> {
 
     let mut embeds: Vec<CreateEmbed> = Vec::new();
     for (g, winners) in giveaways.iter().zip(giveaway_winners.iter()) {
-        let mut e = CreateEmbed { 0: HashMap::new() };
+        let mut e = CreateEmbed(HashMap::new());
         let winner_string = winners
             .iter()
-            .map(|x| format!("<@{}>", x.user_id.to_string()))
+            .map(|x| format!("<@{}>", x.user_id))
             .collect::<Vec<String>>()
             .join(", ");
 
@@ -95,7 +95,7 @@ async fn get_reacters(
     loop {
         match message
             .reaction_users(
-                &http,
+                http,
                 reaction.clone(),
                 Some(100),
                 total_users.last().map(|x| x.id),
@@ -129,11 +129,11 @@ async fn roll_giveaway(
     reaction: ReactionType,
     excluded: Option<Vec<u64>>,
 ) -> Result<(), anyhow::Error> {
-    let excluded = excluded.unwrap_or_else(|| Vec::new());
+    let excluded = excluded.unwrap_or_default();
     let mut message = http
         .get_message(giveaway.channel_id, giveaway.message_id)
         .await?;
-    let candidates = get_reacters(&http, &message, reaction.clone())
+    let candidates = get_reacters(http, &message, reaction.clone())
         .await
         .map(|v| {
             v.into_iter()
@@ -191,7 +191,7 @@ pub async fn end_giveaway(
     reaction: ReactionType,
 ) -> Result<(), anyhow::Error> {
     let giveaway_id = giveaway.id;
-    roll_giveaway(&http, &db, giveaway, reaction.clone(), None).await?;
+    roll_giveaway(http, db, giveaway, reaction.clone(), None).await?;
     db.end_giveaway(giveaway_id).await?;
     info!("Successfully ended giveaway {}", giveaway_id);
     Ok(())
@@ -199,7 +199,7 @@ pub async fn end_giveaway(
 
 pub async fn handle_component_interaction(ctx: &Context, interaction: Interaction) {
     let db = ctx.get_db().await;
-    ensure_offset_map(&ctx).await;
+    ensure_offset_map(ctx).await;
     let mut data = ctx.data.write().await;
     let offsets = data.get_mut::<ListOffset>().unwrap();
 
@@ -277,7 +277,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
     let default_prize: String =
         std::env::var("GIVEAWAY_DEFAULT_PRIZE").unwrap_or("Nothing".to_string());
 
-    ensure_offset_map(&ctx).await;
+    ensure_offset_map(ctx).await;
     let mut data = ctx.data.write().await;
     let offset_map = data.get_mut::<ListOffset>().unwrap();
 
@@ -304,7 +304,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
             let prize = sub_options
                 .by_name("prize")
                 .map_or(default_prize.clone(), |x| {
-                    x.to_string().unwrap_or(default_prize.clone())
+                    x.to_string().unwrap_or(default_prize)
                 });
             let mention = sub_options
                 .by_name("mention")
