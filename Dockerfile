@@ -1,36 +1,48 @@
-FROM rust:latest AS build
+FROM rustlang/rust:nightly AS build
+
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/none" \
+    --shell "/bin/nologin" \
+    --no-create-home \
+    doggo
 
 WORKDIR /app
 
-COPY Cargo* ./
+RUN cargo install diesel_cli --no-default-features --features "mysql"
 
-COPY src/main.rs ./src/
+# cache dependencies into a layer
+RUN cargo new testauskoira-rs
+WORKDIR /app/testauskoira-rs
+COPY Cargo.toml Cargo.lock ./
+RUN cargo build --release
 
-RUN cargo fetch 
+COPY src .
 
-COPY . .
+RUN cargo build --release \
+	&& mkdir /out \
+	&& mv target/release/testauskoira-rs /out
 
-RUN cargo build -j 2 --release --target-dir /usr/local/cargo
+FROM debian:buster-slim
 
-RUN cargo install -j 2 diesel_cli --no-default-features --features "mysql"
+RUN apt-get update \
+	&& apt-get install --no-install-recommends default-mysql-client ca-certificates -y \
+	&& rm -rf /var/lib/apt/lists/*
 
-CMD ["bash", "entrypoint.sh"]
-
-# Final image
-FROM debian:latest
-
-RUN apt update
-
-RUN apt-get install default-mysql-client ca-certificates --yes
+# doggo
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /etc/group /etc/group
 
 WORKDIR /app
 
-COPY --from=build /usr/local/cargo/bin/diesel /app/
-
-COPY --from=build /usr/local/cargo/release/testauskoira-rs /app/
-
+COPY --from=build /usr/local/cargo/bin/diesel ./
+COPY --from=build /out/testauskoira-rs ./
 COPY migrations /app/migrations
-
 COPY entrypoint.sh ./
 
-CMD ["bash", "entrypoint.sh"] 
+RUN chown -R doggo:doggo /app
+
+USER doggo
+
+CMD ["sh", "entrypoint.sh"] 
