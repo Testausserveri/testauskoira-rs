@@ -14,7 +14,7 @@ pub async fn update_giveaways(http: Arc<Http>, db: impl AsRef<Database>) {
         let end = DateTime::<Utc>::from_utc(g.end_time, Utc);
         let now = Utc::now();
         if now > end {
-            match end_giveaway(&http, &db, &g, ReactionType::from(reaction_emoji)).await {
+            match end_giveaway(&http, db, g, ReactionType::from(reaction_emoji)).await {
                 Ok(_) => {
                     db.set_giveaway_completed(g.id, true).await.unwrap();
                     info!("Ended giveaway #{} successfully", g.id);
