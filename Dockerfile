@@ -46,7 +46,7 @@ RUN cargo build --release --target $(cat /target.txt) \
 FROM --platform=$TARGETPLATFORM debian:buster-slim
 
 RUN apt-get update \
-	&& apt-get install --no-install-recommends default-mysql-client ca-certificates -y \
+	&& apt-get install --no-install-recommends default-mysql-client libmariadb-dev ca-certificates -y \
 	&& rm -rf /var/lib/apt/lists/*
 
 # doggo
