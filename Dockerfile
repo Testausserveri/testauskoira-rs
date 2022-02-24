@@ -43,7 +43,7 @@ COPY src .
 RUN cargo build --release --target $(cat /target.txt) \
 	&& mv target/$(cat /target.txt)/release/testauskoira-rs /out
 
-FROM debian:buster-slim
+FROM --platform=$TARGETPLATFORM debian:buster-slim
 
 RUN apt-get update \
 	&& apt-get install --no-install-recommends default-mysql-client ca-certificates -y \
