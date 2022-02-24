@@ -26,11 +26,6 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
     && apt-get install libmariadb-dev:arm64 libmariadb-dev-compat:arm64 default-libmysqlclient-dev:arm64 -y; \
 fi
 
-RUN dpkg --add-architecture arm64 \
-    && apt-get update \
-    && apt-get install gcc-aarch64-linux-gnu libc6-dev-arm64-cross -y \
-    && apt-get install libmariadb-dev:arm64 libmariadb-dev-compat:arm64 default-libmysqlclient-dev:arm64 -y
-
 RUN rustup target add $(cat /target.txt)
 
 RUN cargo install --target $(cat /target.txt) diesel_cli --no-default-features --features "mysql" \
