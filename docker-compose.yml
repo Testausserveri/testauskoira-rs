@@ -3,7 +3,6 @@ version: "3"
 services:
   testauskoira-rs:
     build: .
-    platform: linux/amd64
     restart: "unless-stopped"
     depends_on:
       - testauskoira_mariadb

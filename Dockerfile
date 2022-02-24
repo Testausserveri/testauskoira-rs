@@ -1,5 +1,7 @@
 FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS build
 
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="aarch64-linux-gnu-gcc"
+
 RUN adduser \
     --disabled-password \
     --gecos "" \
@@ -16,6 +18,11 @@ RUN case "$TARGETPLATFORM" in \
     "linux/arm64") echo "aarch64-unknown-linux-gnu" > /target.txt ;; \
     *) exit 1 ;; \
 esac
+
+RUN dpkg --add-architecture arm64 \
+    && apt-get update \
+    && apt-get install gcc-aarch64-linux-gnu libc6-dev-arm64-cross -y \
+    && apt-get install libmariadb-dev:arm64 libmariadb-dev-compat:arm64 default-libmysqlclient-dev:arm64 -y
 
 RUN rustup target add $(cat /target.txt)
 
