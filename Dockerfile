@@ -2,7 +2,7 @@ FROM rustlang/rust:nightly-bullseye-slim AS build
 
 RUN apt update \
     && apt upgrade -y \
-    && apt install -y default-libmysqlclient-dev pkg-config libssl-dev perl make
+    && apt install -y git default-libmysqlclient-dev pkg-config libssl-dev perl make
 
 RUN cargo install diesel_cli --no-default-features --features "mysql" \
     && mkdir /out \
@@ -14,9 +14,11 @@ WORKDIR /testauskoira-rs
 
 COPY Cargo.toml Cargo.lock ./
 
-RUN cargo build --release && rm -rf src/ target/release/deps/testauskoira*
+RUN cargo build --release && rm -rf .git src/ target/release/deps/testauskoira*
 
 COPY ./src ./src
+
+COPY .git .git
 
 RUN cargo build --release && mv target/release/testauskoira-rs /out
 
@@ -48,4 +50,4 @@ RUN chown -R doggo:doggo /app
 
 USER doggo
 
-CMD ["sh", "entrypoint.sh"] 
+CMD ["sh", "entrypoint.sh"]

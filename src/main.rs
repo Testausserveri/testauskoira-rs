@@ -225,7 +225,10 @@ impl EventHandler for Handler {
                 s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
             status_channel_id
                 .send_message(&ctx.http, |m| {
-                    m.content("Testauskoira on herännyt ja valmiina toimintaan!")
+                    m.content(format!(
+                        "Testauskoira on herännyt ja valmiina toimintaan! `{}`",
+                        env!("GIT_HASH")
+                    ))
                 })
                 .await
                 .unwrap();
