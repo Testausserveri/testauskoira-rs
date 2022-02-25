@@ -20,6 +20,8 @@ COPY ./src ./src
 
 COPY .git .git
 
+COPY build.rs build.rs
+
 RUN cargo build --release && mv target/release/testauskoira-rs /out
 
 
