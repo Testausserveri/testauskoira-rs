@@ -98,6 +98,14 @@ impl Database {
         Ok(res.iter().fold(0, |acc, x| acc + x.unwrap()) as f32 / res.len() as f32)
     }
 
+    pub async fn get_last_winner(&self) -> Result<u64, anyhow::Error> {
+        use crate::schema::AwardWinners::dsl::*;
+        Ok(AwardWinners
+            .order_by(date.desc())
+            .select(user_id)
+            .first(&self.pool.get()?)?)
+    }
+
     pub async fn new_winner(&self, id: u64) -> Result<usize, anyhow::Error> {
         let curdate = chrono::Local::today().naive_local();
         let new_winner = NewAwardWinner {

@@ -444,11 +444,11 @@ async fn main() {
 
     let shard_manager = client.shard_manager.clone();
 
-    let cache_and_http = client.cache_and_http.clone();
+    let http = client.cache_and_http.http.clone();
 
     let mut scheduler = AsyncScheduler::with_tz(chrono::Local);
 
-    events::setup_schedulers(&mut scheduler, cache_and_http.clone(), database.clone());
+    events::setup_schedulers(&mut scheduler, http.clone(), database.clone());
 
     tokio::spawn(async move {
         loop {

@@ -1,11 +1,11 @@
 use std::{env, io::Cursor, sync::Arc};
 
 use futures::prelude::*;
-use serenity::{model::id::ChannelId, CacheAndHttp};
+use serenity::{http::client::Http, model::id::ChannelId};
 use tracing::error;
 
 use crate::database::Database;
-async fn give_award_role(ctx: &CacheAndHttp, db: Arc<Database>, winner: u64) {
+async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     let award_role_id: u64 = env::var("AWARD_ROLE_ID")
         .expect("No AWARD_ROLE_ID in .env")
         .parse()
@@ -16,41 +16,21 @@ async fn give_award_role(ctx: &CacheAndHttp, db: Arc<Database>, winner: u64) {
         .parse()
         .expect("Invalid GUILD_ID provided");
 
-    deaward_previous(ctx).await;
-
-    let mut winner_member = ctx.http.get_member(guild_id, winner).await.unwrap();
-    winner_member
-        .add_role(&ctx.http, award_role_id)
-        .await
-        .unwrap();
+    if let Ok(previous_winner) = db.get_last_winner().await {
+        if let Ok(mut member) = http.get_member(guild_id, previous_winner).await {
+            member.remove_role(http, award_role_id).await.ok();
+        } else {
+            info!("Cannot get the member info of the previous winner");
+        }
+    } else {
+        info!("No previous winner found");
+    }
+    let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
+    winner_member.add_role(http, award_role_id).await.unwrap();
     db.new_winner(winner).await.ok();
 }
 
-async fn deaward_previous(ctx: &CacheAndHttp) {
-    let guild_id: u64 = env::var("GUILD_ID")
-        .expect("Expected GUILD_ID in .env")
-        .parse()
-        .expect("Invalid GUILD_ID provided");
-
-    let award_role_id: u64 = env::var("AWARD_ROLE_ID")
-        .expect("No AWARD_ROLE_ID in .env")
-        .parse()
-        .expect("Invalid AWARD_ROLE_ID");
-
-    for user in ctx.cache.users().await.values() {
-        if let Ok(res) = user.has_role(&ctx.http, guild_id, award_role_id).await {
-            if res {
-                if let Some(mut member) = ctx.cache.member(guild_id, user.id).await {
-                    if let Err(e) = member.remove_role(&ctx.http, award_role_id).await {
-                        info!("Failed to deaward {} due to {}", member, e);
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub async fn display_winner(ctx: Arc<CacheAndHttp>, db: Arc<Database>, offset: i32) {
+pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
     let db = db;
     let winners = db.get_most_active(5, offset).await.unwrap();
     let total_msgs = db.get_total_daily_messages(offset).await.unwrap();
@@ -64,7 +44,7 @@ pub async fn display_winner(ctx: Arc<CacheAndHttp>, db: Arc<Database>, offset: i
     );
 
     let guild_id = channel
-        .to_channel(&ctx.http)
+        .to_channel(&http)
         .await
         .unwrap()
         .guild()
@@ -73,7 +53,7 @@ pub async fn display_winner(ctx: Arc<CacheAndHttp>, db: Arc<Database>, offset: i
 
     let winners = stream::iter(winners)
         .map(|(member, msg_count)| {
-            let future = guild_id.member(&ctx.http, member);
+            let future = guild_id.member(&http, member);
             async move { (future.await, msg_count) }
         })
         .buffered(5)
@@ -84,10 +64,10 @@ pub async fn display_winner(ctx: Arc<CacheAndHttp>, db: Arc<Database>, offset: i
         Ok(winner) => {
             let img_name = build_award_image(&winner.face()).await.unwrap();
 
-            give_award_role(&ctx, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
+            give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
 
             channel
-                .send_message(&ctx.http, |m| {
+                .send_message(&http, |m| {
                     m.add_file(std::path::Path::new(&img_name));
                     m.embed(|e| {
                         e.title("Eilisen aktiivisimmat jäsenet");
@@ -136,7 +116,7 @@ pub async fn display_winner(ctx: Arc<CacheAndHttp>, db: Arc<Database>, offset: i
         }
         Err(_) => {
             channel
-                .send_message(&ctx.http, |m| {
+                .send_message(&http, |m| {
                     m.embed(|e| {
                         e.title("Eilisen aktiivisimmat jäsenet");
                         e.description(format!(

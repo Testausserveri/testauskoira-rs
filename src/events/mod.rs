@@ -4,18 +4,14 @@ pub mod giveaway_updater;
 use std::sync::Arc;
 
 use clokwerk::{AsyncScheduler, Job, TimeUnits};
-use serenity::CacheAndHttp;
+use serenity::http::Http;
 
 use crate::{
     database::Database,
     events::{activity_award::display_winner, giveaway_updater::update_giveaways},
 };
 
-pub fn setup_schedulers(
-    scheduler: &mut AsyncScheduler,
-    http: Arc<CacheAndHttp>,
-    db: Arc<Database>,
-) {
+pub fn setup_schedulers(scheduler: &mut AsyncScheduler, http: Arc<Http>, db: Arc<Database>) {
     {
         let http_clone = http.clone();
         let db_clone = db.clone();
@@ -32,7 +28,7 @@ pub fn setup_schedulers(
             let inner_http_clone = http.clone();
             let inner_db_clone = db.clone();
             async move {
-                update_giveaways(inner_http_clone.http.clone(), inner_db_clone).await;
+                update_giveaways(inner_http_clone, inner_db_clone).await;
             }
         });
     }
