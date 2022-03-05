@@ -235,6 +235,26 @@ impl EventHandler for Handler {
         };
     }
 
+    async fn guild_member_update(&self, ctx: Context, old: Option<Member>, new: Member) {
+        if let Some(old_member) = old {
+            let silence_role = env::var("SILENCED_ROLE_ID")
+                .expect("No SILENCED_ROLE_ID in env")
+                .parse::<u64>()
+                .unwrap();
+            let old_silence = old_member.roles.contains(&RoleId(silence_role));
+            let new_silence = new.roles.contains(&RoleId(silence_role));
+            if new_silence && !old_silence {
+                let db = ctx.get_db().await;
+                info!("Silencing user: {}", &new.user);
+                db.silence_user(new.user.id.0).await.ok();
+            } else if old_silence && !new_silence {
+                let db = ctx.get_db().await;
+                info!("un-silencing user: {}", &new.user);
+                db.unsilence_user(new.user.id.0).await.ok();
+            }
+        }
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         match interaction {
             Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
