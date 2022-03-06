@@ -29,7 +29,10 @@ pub async fn handle_interaction(ctx: &Context, intercation: ApplicationCommandIn
             String::new()
         }
     };
-    let roles: Vec<u64> = roles.lines().map(|l| l.parse::<u64>().unwrap()).collect();
+    let roles: Vec<u64> = roles
+        .lines()
+        .map(|l| l.trim().parse::<u64>().unwrap_or(0))
+        .collect();
     guild_roles.retain(|r| roles.contains(&r.id.0));
     if guild_roles.is_empty() {
         intercation
