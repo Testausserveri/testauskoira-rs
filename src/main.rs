@@ -71,6 +71,11 @@ impl EventHandler for Handler {
                 });
                 commands.create_application_command(|command| {
                     command
+                        .name("role")
+                        .description("Valitse itsellesi mieluisia rooleja")
+                });
+                commands.create_application_command(|command| {
+                    command
                         .name("giveaway")
                         .description("Luo arvonta tai hallitse käynnissä olevia arpajaisia")
                         .default_permission(false)
@@ -260,13 +265,18 @@ impl EventHandler for Handler {
             Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
                 "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
                 "github" => commands::links::github(&ctx, a.to_owned()).await,
+                "role" => commands::role::handle_interaction(&ctx, a.to_owned()).await,
                 "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
                 _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
             },
-            Interaction::MessageComponent(_) => {
-                voting::handle_vote_interaction(&ctx, interaction.clone()).await;
-                commands::giveaway::handle_component_interaction(&ctx, interaction.clone()).await;
-            }
+            Interaction::MessageComponent(ref b) => match b.data.custom_id.as_str() {
+                "give_role_menu" => commands::role::handle_menu_button(&ctx, b.to_owned()).await,
+                _ => {
+                    voting::handle_vote_interaction(&ctx, interaction.clone()).await;
+                    commands::giveaway::handle_component_interaction(&ctx, interaction.clone())
+                        .await;
+                }
+            },
             _ => {}
         };
     }

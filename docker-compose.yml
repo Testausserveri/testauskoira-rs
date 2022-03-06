@@ -14,6 +14,7 @@ services:
       - ./img:/app/img
       - ./blacklist.txt:/app/blacklist.txt
       - ./award_id_blacklist.txt:/app/award_id_blacklist.txt
+      - ./self_service_roles.txt:/app/self_service_roles.txt
 
   testauskoira_mariadb:
     container_name: testauskoira_mariadb
