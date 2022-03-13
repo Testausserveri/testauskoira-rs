@@ -465,8 +465,15 @@ async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) 
                 .get_member(guild_id, event.suspect_id as u64)
                 .await
                 .unwrap();
-            db.silence_user(member.user.id.0).await.unwrap();
-            member.add_role(&ctx.http, silence_role).await.unwrap();
+            db.silence_user(member.user.id.0).await.ok(); // Might fail if the member is already silenced
+            member.add_role(&ctx.http, silence_role).await.ok();
+            member
+                .disable_communication_until_datetime(
+                    &ctx.http,
+                    chrono::Utc::now() + chrono::Duration::weeks(1),
+                )
+                .await
+                .unwrap();
             if (member.user.dm(&ctx.http, |m| {
                 m.content("Sinut on hiljennetty huonon käyttäytymisen vuoksi arvojäsenten toimesta.\n\nMikäli haluat keskusteluoikeutesi takaisin, voit olla yhteydessä Mastermindeihin joko yksityisviestitse tai sähköpostitse masterminds@testausserveri.fi. Tarkistathan sääntömme kanavalta <#798799175072219136>.")
             }).await).is_err() {
