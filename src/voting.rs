@@ -320,7 +320,6 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     }
     let mods_online = get_online_mod_count(ctx).await;
     let moderation_channel = ctx.http.get_channel(moderation_channel_id).await.unwrap();
-    let suspect = suspect_message.author.clone();
     let voting_message = moderation_channel
         .id()
         .send_message(&ctx.http, |m| {
@@ -338,22 +337,6 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
     .await
     .unwrap();
     update_voting_message(ctx, voting_message.id.0).await;
-    let message_link = suspect_message.link_ensured(&ctx.http).await;
-    suspect
-        .dm(&ctx.http, |m| {
-            m.content("Viestistäsi on tehty ilmoitus moderaattoreille!");
-            m.components(|c| {
-                c.create_action_row(|r| {
-                    r.create_button(|b| {
-                        b.label("Näytä viesti");
-                        b.style(ButtonStyle::Link);
-                        b.url(message_link)
-                    })
-                })
-            })
-        })
-        .await
-        .unwrap();
 }
 
 /// Get the amount of online members who have access to the moderation channel.
