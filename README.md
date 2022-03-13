@@ -7,7 +7,7 @@
 Botin toimintaa ja sen tietoturvallisuutta voi tutkia tässä repositoriossa, johon on sen lähdekoodi julkaistuna kokonaisuudessaan läpinäkyvyyttä varten.
 Otamme mieluusti vastaan myös kaikenmuotoisia ominaisuuksia, jos haluat sellaisen koodata ja tehdä pr. Myös issuesissa voit antaa feature requestejä, joita ylläpitäjät tai muut vapaaehtoiset voivat toteuttaa.
 
-Parhaiten apua bottiin saa discordista käyttäjältä DrVilepis#5329.
+Parhaiten apua bottiin saa discordista käyttäjiltä DrVilepis#5329 ja Luukasa#9330.
 
 ## Ominaisuudet ja tehtävät
 
@@ -52,7 +52,7 @@ Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://d
 
 ### Automaattinen julkaiseminen
 
-Repository on konfiguroitu automaattisesti julkaisemaan itsensä halutulle palvelimelle. Palvelin pitää tosin valmistella ensiksi kloonaamalla tämä repository sinne ja asettamalla tiedoston `.env`-arvot. Kun joku puskee uuden muutoksen myöhemmin `main`-haaraan ohjelma rakennetaan Githubin palvelimella, pusketaan heidän dockerkuva-arkistoon, ladataan arkistosta tuotantopalvelimelle ja käynnistetään. 
+Repository on konfiguroitu automaattisesti julkaisemaan itsensä halutulle palvelimelle. Palvelin pitää tosin valmistella ensiksi kloonaamalla tämä repository sinne ja asettamalla tiedoston `.env`-arvot. Kun joku puskee uuden muutoksen myöhemmin `main`-haaraan ohjelma rakennetaan Githubin palvelimella, pusketaan heidän dockerkuva-arkistoon, ladataan arkistosta tuotantopalvelimelle ja käynnistetään.
 
 Automaattisen julkaisemisen toimiminen vaatii seuraavien salaisten arvojen asettaminen repositoryn (tapahtuu osoitteessa: [https://github.com/user/repository/settings/secrets/actions](https://github.com/user/repository/settings/secrets/actions). Arvojen tulee olla:
 
