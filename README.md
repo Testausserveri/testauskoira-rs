@@ -13,7 +13,7 @@ Parhaiten apua bottiin saa discordista käyttäjiltä DrVilepis#5329 ja Luukasa#
 
 ### Viestistatistiikan kerääminen lukuina tietokantaan
 
-Testauskoira tallentaa tietokantaan viestien määrä/päivä/käyttäjä-dataa. Dataa käytetään analytiikkaan, statistiikan esittämiseen julkisesti kokonaisuutena (viestejä koko palvelimella päivän aikana), tai tulevaisuudessa aktiivisten käyttäjien palkitsemiseen. Käyttäjien viestien sisältöjä ei tallenneta.
+Testauskoira tallentaa tietokantaan viestien määrä/päivä/käyttäjä-dataa. Dataa käytetään analytiikkaan, statistiikan esittämiseen julkisesti kokonaisuutena (viestejä koko palvelimella päivän aikana), sekä aktiivisten käyttäjien palkitsemiseen. Käyttäjien viestien sisältöjä ei tallenneta.
 
 ### Roolien myöntäminen jäsenille
 
