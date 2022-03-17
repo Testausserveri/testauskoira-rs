@@ -285,20 +285,6 @@ impl EventHandler for Handler {
         let db = ctx.get_db().await;
 
         // FIXME: Store in memory
-        let words = match std::fs::read_to_string("blacklist.txt") {
-            Ok(s) => s,
-            Err(e) => {
-                match e.kind() {
-                    std::io::ErrorKind::NotFound => {
-                        std::fs::File::create("blacklist.txt")
-                            .expect("Unable to create blacklist.txt");
-                    }
-                    _ => panic!("Unable to access blacklist.txt"),
-                }
-                String::new()
-            }
-        };
-
         let mut data = ctx.data.write().await;
         let regexes = data.get_mut::<BlacklistRegexes>().unwrap();
 
@@ -308,6 +294,20 @@ impl EventHandler for Handler {
             .unwrap();
 
         if last_edited != regexes.lock().await.last_edited {
+            let words = match std::fs::read_to_string("blacklist.txt") {
+                Ok(s) => s,
+                Err(e) => {
+                    match e.kind() {
+                        std::io::ErrorKind::NotFound => {
+                            std::fs::File::create("blacklist.txt")
+                                .expect("Unable to create blacklist.txt");
+                        }
+                        _ => panic!("Unable to access blacklist.txt"),
+                    }
+                    String::new()
+                }
+            };
+
             info!("Generating new blacklist regexes");
             let mut new_vec = Vec::new();
             for w in words.lines() {
