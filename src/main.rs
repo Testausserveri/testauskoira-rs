@@ -71,6 +71,11 @@ impl EventHandler for Handler {
                 });
                 commands.create_application_command(|command| {
                     command
+                        .name("liity")
+                        .description("Täytä jäsenhakemus liittyäksesi Testausserveri ry:n jäseneksi")
+                });
+                commands.create_application_command(|command| {
+                    command
                         .name("role")
                         .description("Valitse itsellesi mieluisia rooleja")
                 });
@@ -265,6 +270,7 @@ impl EventHandler for Handler {
             Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
                 "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
                 "github" => commands::links::github(&ctx, a.to_owned()).await,
+                "liity" => commands::links::liity(&ctx, a.to_owned()).await,
                 "role" => commands::role::handle_interaction(&ctx, a.to_owned()).await,
                 "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
                 _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),

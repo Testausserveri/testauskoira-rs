@@ -12,3 +12,14 @@ pub async fn github(ctx: &Context, interaction: ApplicationCommandInteraction) {
         .await
         .unwrap();
 }
+
+pub async fn liity(ctx: &Context, interaction: ApplicationCommandInteraction) {
+    interaction
+        .create_interaction_response(&ctx.http, |r| {
+            r.interaction_response_data(|d| {
+                d.content("https://testausserveri.fi/link/jasenhakemus")
+            })
+        })
+        .await
+        .unwrap();
+}
