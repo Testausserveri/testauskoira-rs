@@ -24,11 +24,22 @@ pub fn setup_schedulers(scheduler: &mut AsyncScheduler, http: Arc<Http>, db: Arc
         });
     }
     {
+        let http_clone = http.clone();
+        let db_clone = db.clone();
         scheduler.every(30.seconds()).run(move || {
+            let inner_http_clone = http_clone.clone();
+            let inner_db_clone = db_clone.clone();
+            async move {
+                update_giveaways(inner_http_clone, inner_db_clone).await;
+            }
+        });
+    }
+    {
+        scheduler.every(10.seconds()).run(move || {
             let inner_http_clone = http.clone();
             let inner_db_clone = db.clone();
             async move {
-                update_giveaways(inner_http_clone, inner_db_clone).await;
+                crate::commands::vote::update_all_votes(inner_http_clone, inner_db_clone).await;
             }
         });
     }

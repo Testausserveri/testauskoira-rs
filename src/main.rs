@@ -81,6 +81,32 @@ impl EventHandler for Handler {
                 });
                 commands.create_application_command(|command| {
                     command
+                        .name("vote")
+                        .description("Aloita äänestys")
+                        .create_option(|option| {
+                            option
+                                .name("title")
+                                .kind(ApplicationCommandOptionType::String)
+                                .description("Äänestyksen aihe")
+                                .required(true)
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("options")
+                                .kind(ApplicationCommandOptionType::String)
+                                .description("Äänestyksen vaihtoehdot")
+                                .required(true)
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("duration")
+                                .kind(ApplicationCommandOptionType::Integer)
+                                .description("Äänestyksen kesto sekunneissa")
+                                .required(true)
+                        })
+                });
+                commands.create_application_command(|command| {
+                    command
                         .name("giveaway")
                         .description("Luo arvonta tai hallitse käynnissä olevia arpajaisia")
                         .default_permission(false)
@@ -273,14 +299,19 @@ impl EventHandler for Handler {
                 "liity" => commands::links::liity(&ctx, a.to_owned()).await,
                 "role" => commands::role::handle_interaction(&ctx, a.to_owned()).await,
                 "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
+                "vote" => commands::vote::create_vote(&ctx, a.to_owned()).await,
                 _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
             },
             Interaction::MessageComponent(ref b) => match b.data.custom_id.as_str() {
                 "give_role_menu" => commands::role::handle_menu_button(&ctx, b.to_owned()).await,
                 _ => {
-                    voting::handle_vote_interaction(&ctx, interaction.clone()).await;
-                    commands::giveaway::handle_component_interaction(&ctx, interaction.clone())
-                        .await;
+                    if b.data.custom_id.as_str().starts_with("vote_") {
+                        commands::vote::user_vote(&ctx, b.to_owned()).await;
+                    } else {
+                        voting::handle_vote_interaction(&ctx, interaction.clone()).await;
+                        commands::giveaway::handle_component_interaction(&ctx, interaction.clone())
+                            .await;
+                    }
                 }
             },
             _ => {}

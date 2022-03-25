@@ -77,6 +77,44 @@ table! {
 }
 
 table! {
+    TempAwardWinners (id) {
+        id -> Integer,
+        user_id -> Unsigned<Bigint>,
+        date -> Date,
+    }
+}
+
+table! {
+    VoteEventOptions (id) {
+        id -> Integer,
+        vote_id -> Integer,
+        option_number -> Integer,
+        option_value -> Varchar,
+    }
+}
+
+table! {
+    VoteEvents (id) {
+        id -> Integer,
+        title -> Tinytext,
+        message_id -> Unsigned<Bigint>,
+        channel_id -> Unsigned<Bigint>,
+        author_id -> Unsigned<Bigint>,
+        start_time -> Datetime,
+        duration -> Unsigned<Integer>,
+    }
+}
+
+table! {
+    Votes (id) {
+        id -> Integer,
+        vote_id -> Integer,
+        voter_id -> Unsigned<Bigint>,
+        option_number -> Integer,
+    }
+}
+
+table! {
     VotingActions (id) {
         id -> Integer,
         vote_type -> Integer,
@@ -86,6 +124,8 @@ table! {
 }
 
 joinable!(GiveawayWinners -> Giveaways (giveaway_id));
+joinable!(VoteEventOptions -> VoteEvents (vote_id));
+joinable!(Votes -> VoteEvents (vote_id));
 
 allow_tables_to_appear_in_same_query!(
     AwardWinners,
@@ -95,5 +135,9 @@ allow_tables_to_appear_in_same_query!(
     messages_day_stat,
     SilencedMembers,
     SuspectMessageEdits,
+    TempAwardWinners,
+    VoteEventOptions,
+    VoteEvents,
+    Votes,
     VotingActions,
 );

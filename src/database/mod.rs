@@ -1,6 +1,7 @@
 use serenity::prelude::TypeMapKey;
 pub mod giveaway;
 pub mod message_logging;
+pub mod vote;
 pub mod voting;
 
 use std::sync::Arc;

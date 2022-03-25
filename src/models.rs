@@ -166,3 +166,63 @@ use crate::schema::SilencedMembers;
 pub struct NewSilencedMember {
     pub user_id: u64,
 }
+
+#[derive(Queryable)]
+pub struct VoteEvent {
+    pub id: i32,
+    pub title: String,
+    pub message_id: u64,
+    pub channel_id: u64,
+    pub author_id: u64,
+    pub start_time: chrono::NaiveDateTime,
+    pub duration: u32,
+}
+
+use crate::schema::VoteEvents;
+
+#[derive(Insertable)]
+#[table_name = "VoteEvents"]
+pub struct NewVoteEvent {
+    pub message_id: u64,
+    pub channel_id: u64,
+    pub author_id: u64,
+    pub title: String,
+    pub start_time: chrono::NaiveDateTime,
+    pub duration: u32,
+}
+
+#[derive(Queryable)]
+pub struct VoteEventOption {
+    pub id: i32,
+    pub vote_id: i32,
+    pub option_number: i32,
+    pub option_value: String,
+}
+
+use crate::schema::VoteEventOptions;
+
+#[derive(Insertable)]
+#[table_name = "VoteEventOptions"]
+pub struct NewVoteEventOption {
+    pub vote_id: i32,
+    pub option_number: i32,
+    pub option_value: String,
+}
+
+#[derive(Queryable)]
+pub struct Vote {
+    pub id: i32,
+    pub vote_id: i32,
+    pub voter_id: u64,
+    pub option_number: i32,
+}
+
+use crate::schema::Votes;
+
+#[derive(Insertable)]
+#[table_name = "Votes"]
+pub struct NewVote {
+    pub vote_id: i32,
+    pub voter_id: u64,
+    pub option_number: i32,
+}
