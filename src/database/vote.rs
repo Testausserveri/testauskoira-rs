@@ -53,7 +53,7 @@ impl Database {
     pub fn get_vote_event_from_id(&self, vote_id: i32) -> Result<VoteEvent, anyhow::Error> {
         use crate::schema::VoteEvents::dsl::*;
         Ok(VoteEvents
-            .filter(id.eq(id))
+            .filter(id.eq(vote_id))
             .first::<VoteEvent>(&self.pool.get()?)?)
     }
 
