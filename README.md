@@ -44,11 +44,26 @@ GIVEAWAY_DEFAULT_DURATION=
 GIVEAWAY_DEFAULT_WINNERS=
 GIVEAWAY_DEFAULT_PRIZE=
 GIVEAWAY_REACTION_EMOJI=
+STATUS_CHANNEL_ID=
 ```
 
 Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:
 * Presence Intent
 * Server Members Intent
+
+### Kehitysympäristön pystyttäminen
+
+#### Vaadittavat ohjelmistot
+* Rust (nightly) (suositellaan asennettavan [rustupin](https://rustup.rs/) avulla)
+* MySQL/MariaDB
+* diesel_cli (Asennetaan esim. cargolla `cargo install diesel_cli`)
+
+#### Vaiheittain
+1. Kloonaa tämä repository
+2. Pystytä MySQL/MariaDB tietokanta laitteellesi ja lisää url `.env` tiedostoon seuraavanlaisesti: `DATABASE_URL=mysql://kayttaja:salasana@localhost/TietokannanNimi`
+3. Aja komento `diesel setup` joka valmistelee tietokannan
+4. Lisää loput muuttujat `.env`:iin
+5. Olet valmis. Nyt voit ajaa `cargo run` ja aloittaa Testauskoiran devaamisen ;)
 
 ### Automaattinen julkaiseminen
 
