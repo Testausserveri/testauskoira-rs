@@ -27,7 +27,6 @@ fn generate_vote_message(
     mut vote_options: Vec<VoteEventOption>,
     author: &User,
 ) {
-    message.content(format!("Äänestä: **{}**", &vote.title));
     vote_options.sort_unstable_by_key(|v| v.option_number);
     let mut desc_vote_options = Vec::new();
     for v in &vote_options {
@@ -44,6 +43,7 @@ fn generate_vote_message(
     }
     let cur_time = chrono::Local::now().naive_local();
     message.embed(|e| {
+        e.title(format!("Äänestä: {}", &vote.title));
         e.author(|a| {
             a.name(author.tag());
             a.icon_url(author.face())
