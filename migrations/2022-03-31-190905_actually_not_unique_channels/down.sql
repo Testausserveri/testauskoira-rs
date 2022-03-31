@@ -1,0 +1,32 @@
+DROP TABLE VoteEventOptions;
+DROP TABLE Votes;
+DROP TABLE VoteEvents;
+
+CREATE TABLE VoteEvents(
+    id INTEGER UNIQUE NOT NULL AUTO_INCREMENT,
+    title TINYTEXT NOT NULL,
+    message_id BIGINT UNSIGNED UNIQUE NOT NULL,
+    channel_id BIGINT UNSIGNED UNIQUE NOT NULL,
+    author_id BIGINT UNSIGNED NOT NULL,
+    start_time DATETIME NOT NULL,
+    duration INTEGER UNSIGNED NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE VoteEventOptions(
+    id INTEGER UNIQUE NOT NULL AUTO_INCREMENT,
+    vote_id INTEGER NOT NULL,
+    option_number INTEGER NOT NULL,
+    option_value VARCHAR(32) NOT NULL,
+    PRIMARY KEY (id),
+    FOREIGN KEY (vote_id) REFERENCES VoteEvents (id)
+);
+
+CREATE TABLE Votes(
+    id INTEGER UNIQUE NOT NULL AUTO_INCREMENT,
+    vote_id INTEGER NOT NULL,
+    voter_id BIGINT UNSIGNED NOT NULL,
+    option_number INTEGER NOT NULL,
+    PRIMARY KEY (id),
+    FOREIGN KEY (vote_id) REFERENCES VoteEvents (id)
+);
