@@ -167,7 +167,8 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
             _ => {}
         }
     }
-    let options = options.split(',').collect::<Vec<&str>>();
+    let mut options = options.trim().split(',').collect::<Vec<&str>>();
+    options.retain(|o| o.len() == o.trim().len() && !o.is_empty());
     if options.len() < 2 {
         interaction
             .create_interaction_response(&ctx.http, |r| {
