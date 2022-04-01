@@ -130,7 +130,7 @@ pub async fn user_vote(ctx: &Context, interaction: MessageComponentInteraction) 
     let id = db
         .get_vote_id_from_message_id(interaction.message.id.0)
         .unwrap();
-    update_vote(&ctx.http, &db, id).await;
+    update_vote(&ctx.http, &db, id).await.unwrap();
     interaction
         .create_interaction_response(&ctx.http, |r| r.kind(DeferredUpdateMessage))
         .await
