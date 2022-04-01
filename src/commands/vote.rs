@@ -71,9 +71,9 @@ fn generate_vote_message(
     });
 }
 
-pub async fn update_vote(http: &Http, db: &Database, vote_id: i32) {
+pub async fn update_vote(http: &Http, db: &Database, vote_id: i32) -> Result<(), anyhow::Error> {
     let cur_time = chrono::Local::now().naive_local();
-    let vote_event = db.get_vote_event_from_id(vote_id).unwrap();
+    let vote_event = db.get_vote_event_from_id(vote_id)?;
     if (vote_event.duration as i32) < (cur_time - vote_event.start_time).num_seconds() as i32 {
         return end_vote(http, db, vote_event).await;
     }
@@ -82,29 +82,26 @@ pub async fn update_vote(http: &Http, db: &Database, vote_id: i32) {
     let author = http.get_user(vote_event.author_id).await.unwrap();
     let mut message = http
         .get_message(vote_event.channel_id, vote_event.message_id)
-        .await
-        .unwrap();
+        .await?;
     message
         .edit(&http, |m| {
             generate_vote_message(m, vote_event, votes, options, &author);
             m
         })
-        .await
-        .unwrap();
+        .await?;
+    Ok(())
 }
 
-pub async fn update_all_votes(http: Arc<Http>, db: Arc<Database>) {
-    let votes = db.get_vote_ids().unwrap();
+pub async fn update_all_votes(http: Arc<Http>, db: Arc<Database>) -> Result<(), anyhow::Error> {
+    let votes = db.get_vote_ids()?;
     for vote in votes {
-        update_vote(&http, &db, vote).await;
+        update_vote(&http, &db, vote).await?;
     }
+    Ok(())
 }
 
-pub async fn end_vote(http: &Http, db: &Database, vote: VoteEvent) {
-    let mut message = http
-        .get_message(vote.channel_id, vote.message_id)
-        .await
-        .unwrap();
+pub async fn end_vote(http: &Http, db: &Database, vote: VoteEvent) -> Result<(), anyhow::Error> {
+    let mut message = http.get_message(vote.channel_id, vote.message_id).await?;
     message
         .edit(&http, |m| {
             m.add_embed(|e| {
@@ -113,9 +110,9 @@ pub async fn end_vote(http: &Http, db: &Database, vote: VoteEvent) {
             });
             m.components(|c| c)
         })
-        .await
-        .unwrap();
-    db.purge_vote(vote.id).unwrap();
+        .await?;
+    db.purge_vote(vote.id)?;
+    Ok(())
 }
 
 pub async fn user_vote(ctx: &Context, interaction: MessageComponentInteraction) {

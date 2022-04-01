@@ -39,7 +39,11 @@ pub fn setup_schedulers(scheduler: &mut AsyncScheduler, http: Arc<Http>, db: Arc
             let inner_http_clone = http.clone();
             let inner_db_clone = db.clone();
             async move {
-                crate::commands::vote::update_all_votes(inner_http_clone, inner_db_clone).await;
+                if let Err(e) =
+                    crate::commands::vote::update_all_votes(inner_http_clone, inner_db_clone).await
+                {
+                    error!("Error while updating votes: {}", e);
+                }
             }
         });
     }
