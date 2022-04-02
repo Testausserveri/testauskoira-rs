@@ -172,13 +172,14 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
         .split(',')
         .map(|o| &o[0..std::cmp::min(o.len(), 32)])
         .collect::<Vec<&str>>();
+    options.dedup();
     options.retain(|o| !o.trim().is_empty());
     if options.len() < 2 {
         interaction
             .create_interaction_response(&ctx.http, |r| {
                 r.interaction_response_data(|d| {
                     d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
-                    d.content("Try putting more than 1 option")
+                    d.content("Try putting more than 1 unique option")
                 })
             })
             .await
