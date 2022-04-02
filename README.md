@@ -45,6 +45,7 @@ GIVEAWAY_DEFAULT_WINNERS=
 GIVEAWAY_DEFAULT_PRIZE=
 GIVEAWAY_REACTION_EMOJI=
 STATUS_CHANNEL_ID=
+RULES_CHANNEL_ID=
 ```
 
 Lisäksi sinun tulee ottaa käytöön [discordin developer consolesta](https://discord.com/developers) seuraavat INTENTit:

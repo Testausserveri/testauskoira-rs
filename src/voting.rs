@@ -457,8 +457,10 @@ async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) 
                 )
                 .await
                 .unwrap();
+            let rules_channel_id =
+                env::var("RULES_CHANNEL_ID").expect("RULES_CHANNEL_ID is not set");
             if (member.user.dm(&ctx.http, |m| {
-                m.content("Sinut on hiljennetty huonon käyttäytymisen vuoksi arvojäsenten toimesta.\n\nMikäli haluat keskusteluoikeutesi takaisin, voit olla yhteydessä Mastermindeihin joko yksityisviestitse tai sähköpostitse masterminds@testausserveri.fi. Tarkistathan sääntömme kanavalta <#798799175072219136>.")
+                m.content(format!("Sinut on hiljennetty huonon käyttäytymisen vuoksi arvojäsenten toimesta.\n\nMikäli haluat keskusteluoikeutesi takaisin, voit olla yhteydessä Mastermindeihin joko yksityisviestitse tai sähköpostitse masterminds@testausserveri.fi. Tarkistathan sääntömme kanavalta <#{}>.", rules_channel_id))
             }).await).is_err() {
                 info!("Unable to send \"Silenced notification\" to {}", member.user.id.0);
             }
