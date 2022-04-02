@@ -62,13 +62,15 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
 
     match &winners[0].0.as_ref() {
         Ok(winner) => {
-            let img_name = build_award_image(&winner.face()).await.unwrap();
+            let img_name = build_award_image(&winner.face()).await;
 
             give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
 
             channel
                 .send_message(&http, |m| {
-                    m.add_file(std::path::Path::new(&img_name));
+                    if img_name.is_ok() {
+                        m.add_file(std::path::Path::new(img_name.as_ref().unwrap()));
+                    }
                     m.embed(|e| {
                         e.title("Eilisen aktiivisimmat jäsenet");
                         e.description(format!(
@@ -77,7 +79,9 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
                             total_msgs as f32 / messages_average * 100f32
                         ));
                         e.color(serenity::utils::Color::from_rgb(68, 82, 130));
-                        e.image(format!("attachment://{}", img_name));
+                        if img_name.is_ok() {
+                            e.image(format!("attachment://{}", &img_name.as_ref().unwrap()));
+                        }
                         winners
                             .iter()
                             .enumerate()
@@ -164,23 +168,17 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
     };
 }
 
-pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
+pub async fn build_award_image(user_img_url: &str) -> Result<String, anyhow::Error> {
     let img_url_base = &user_img_url[..user_img_url.rfind('.').unwrap()];
     let profile_picture = reqwest::get(format!("{}.png?size=128", img_url_base))
-        .await
-        .unwrap()
+        .await?
         .bytes()
-        .await
-        .unwrap();
+        .await?;
     let pfp = image::io::Reader::new(Cursor::new(profile_picture))
-        .with_guessed_format()
-        .unwrap()
-        .decode()
-        .unwrap();
-    let mask = image::io::Reader::open("img/blackcomposite.png")
-        .unwrap()
-        .decode()
-        .unwrap();
+        .with_guessed_format()?
+        .decode()?
+        .resize(128, 128, image::imageops::FilterType::Gaussian);
+    let mask = image::io::Reader::open("img/blackcomposite.png")?.decode()?;
 
     let mut pfp = pfp.to_rgba8();
     let mask = mask.to_rgba8();
@@ -193,7 +191,7 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, ()> {
     }
 
     image::imageops::overlay(&mut pfp, &mask, 0, 0);
-    pfp.save("pfp_new.png").unwrap();
+    pfp.save("pfp_new.png")?;
 
     Ok("pfp_new.png".to_string())
 }
