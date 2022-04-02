@@ -167,7 +167,11 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
             _ => {}
         }
     }
-    let mut options = options.split(',').collect::<Vec<&str>>();
+    title.truncate(255);
+    let mut options = options
+        .split(',')
+        .map(|o| &o[0..std::cmp::min(o.len(), 32)])
+        .collect::<Vec<&str>>();
     options.retain(|o| !o.trim().is_empty());
     if options.len() < 2 {
         interaction
