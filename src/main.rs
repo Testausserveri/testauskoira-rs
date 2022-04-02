@@ -1,3 +1,5 @@
+#![feature(let_else)]
+
 mod commands;
 mod database;
 mod events;

@@ -201,13 +201,20 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
         .get_vote_event_from_message_id(vote_message.id.0)
         .unwrap();
     let vote_options = db.get_options_by_vote_id(vote_id).unwrap();
-    vote_message
-        .edit(&ctx.http, |m| {
-            generate_vote_message(m, vote_event, Vec::new(), vote_options, &interaction.user);
-            m
-        })
-        .await
-        .unwrap();
+    let Ok(_) = vote_message.edit(&ctx.http, |m| {
+        generate_vote_message(m, vote_event, Vec::new(), vote_options, &interaction.user);
+        m
+    }).await else {
+        db.purge_vote(vote_id).unwrap();
+        interaction
+            .create_interaction_response(&ctx.http, |r| {
+                r.interaction_response_data(|d| {
+                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
+                    d.content("Invalid request, perhaps included too many options")
+                })
+            }).await.unwrap();
+            return vote_message.delete(&ctx.http).await.unwrap();
+    };
     interaction
         .create_interaction_response(&ctx.http, |r| {
             r.interaction_response_data(|d| {
