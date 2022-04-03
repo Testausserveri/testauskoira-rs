@@ -41,7 +41,12 @@ fn generate_vote_message(
         );
         desc_vote_options.push(k);
     }
-    let cur_time = chrono::Local::now().naive_local();
+    desc_vote_options.push(format!(
+        "Ends in: <t:{}:R>",
+        vote.start_time.timestamp()
+            + vote.duration as i64
+            + chrono::Local::now().offset().utc_minus_local() as i64
+    ));
     message.embed(|e| {
         e.title(format!("Äänestä: {}", &vote.title));
         e.author(|a| {
@@ -49,13 +54,7 @@ fn generate_vote_message(
             a.icon_url(author.face())
         });
         e.description(desc_vote_options.join("\n"));
-        e.color(serenity::utils::Color::KERBAL);
-        e.footer(|f| {
-            f.text(format!(
-                "Ends in: {} seconds",
-                vote.duration as i64 - (cur_time - vote.start_time).num_seconds()
-            ))
-        })
+        e.color(serenity::utils::Color::KERBAL)
     });
     message.components(|c| {
         c.create_action_row(|r| {
@@ -94,8 +93,12 @@ pub async fn update_vote(http: &Http, db: &Database, vote_id: i32) -> Result<(),
 
 pub async fn update_all_votes(http: Arc<Http>, db: Arc<Database>) -> Result<(), anyhow::Error> {
     let votes = db.get_vote_ids()?;
+    let cur_time = chrono::Local::now().naive_local();
     for vote in votes {
-        update_vote(&http, &db, vote).await?;
+        let vote_event = db.get_vote_event_from_id(vote)?;
+        if (vote_event.duration as i32) < (cur_time - vote_event.start_time).num_seconds() as i32 {
+            end_vote(&http, &db, vote_event).await?;
+        }
     }
     Ok(())
 }
