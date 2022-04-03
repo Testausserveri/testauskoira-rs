@@ -169,14 +169,6 @@ fn generate_moderation_message(
                 }
                 b.custom_id("ban_button")
             });
-            r.create_button(|b| {
-                b.label("Estä ilmoittaja");
-                b.style(ButtonStyle::Danger);
-                if voting.block_reporter_votes == voting.block_reporter_votes_required {
-                    b.disabled(true);
-                }
-                b.custom_id("abuse_button")
-            });
             if !message_link.is_empty() {
                 r.create_button(|b| {
                     b.label("Näytä viesti");
@@ -184,6 +176,16 @@ fn generate_moderation_message(
                     b.url(message_link)
                 });
             }
+            r.create_button(|b| {
+                b.label("Estä ilmoittaja");
+                b.style(ButtonStyle::Danger);
+                if voting.block_reporter_votes == voting.block_reporter_votes_required {
+                    b.disabled(true);
+                }
+                b.custom_id("abuse_button")
+            })
+        });
+        c.create_action_row(|r| {
             r.create_button(|b| {
                 b.label(format!("{} klikkausta tuhlattu", voting.useless_clicks));
                 b.style(ButtonStyle::Success);
