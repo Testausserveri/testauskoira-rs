@@ -77,14 +77,6 @@ table! {
 }
 
 table! {
-    TempAwardWinners (id) {
-        id -> Integer,
-        user_id -> Unsigned<Bigint>,
-        date -> Date,
-    }
-}
-
-table! {
     VoteEventOptions (id) {
         id -> Integer,
         vote_id -> Integer,
@@ -135,7 +127,6 @@ allow_tables_to_appear_in_same_query!(
     messages_day_stat,
     SilencedMembers,
     SuspectMessageEdits,
-    TempAwardWinners,
     VoteEventOptions,
     VoteEvents,
     Votes,
