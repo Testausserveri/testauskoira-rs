@@ -2,11 +2,14 @@
 
 use serenity::{
     builder::EditMessage,
-    model::interactions::{
-        application_command::ApplicationCommandInteraction,
-        message_component::ButtonStyle,
-        InteractionApplicationCommandCallbackDataFlags,
-        InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
+    model::{
+        id::UserId,
+        interactions::{
+            application_command::ApplicationCommandInteraction,
+            message_component::ButtonStyle,
+            InteractionApplicationCommandCallbackDataFlags,
+            InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
+        },
     },
     prelude::TypeMapKey,
 };
@@ -68,6 +71,7 @@ fn generate_moderation_message(
     voting: CouncilVoting,
     edits: Vec<SuspectMessageEdit>,
     votes: Vec<VotingAction>,
+    suspect_tag: String,
 ) {
     let guild_id = env::var("GUILD_ID").expect("NO GUILD_ID in .env");
     let message_link = format!(
@@ -88,7 +92,7 @@ fn generate_moderation_message(
         );
         e.field(
             "Viestin lähettänyt",
-            format!("<@{}>", voting.suspect_id),
+            format!("<@{}>, {}", voting.suspect_id, suspect_tag),
             true,
         );
         e.field(
@@ -203,9 +207,14 @@ async fn update_voting_message(ctx: &Context, voting_message_id: u64) {
         .get_message(moderation_channel_id, voting_message_id)
         .await
         .unwrap();
+    let suspect_tag = if let Ok(user) = UserId(event.suspect_id).to_user(&ctx.http).await {
+        user.tag()
+    } else {
+        String::from("[Poistettu käyttäjä]")
+    };
     message
         .edit(&ctx.http, |m| {
-            generate_moderation_message(m, event, edits, votes);
+            generate_moderation_message(m, event, edits, votes, suspect_tag);
             m
         })
         .await
