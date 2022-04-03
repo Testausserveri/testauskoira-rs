@@ -42,7 +42,7 @@ fn generate_vote_message(
         desc_vote_options.push(k);
     }
     desc_vote_options.push(format!(
-        "Ends in: <t:{}:R>",
+        "End time: <t:{}:R>",
         vote.start_time.timestamp()
             + vote.duration as i64
             + chrono::Local::now().offset().utc_minus_local() as i64
@@ -108,7 +108,7 @@ pub async fn end_vote(http: &Http, db: &Database, vote: VoteEvent) -> Result<(),
     message
         .edit(&http, |m| {
             m.add_embed(|e| {
-                e.description("Vote has ended!");
+                e.description("Vote has concluded!");
                 e.color(serenity::utils::Color::FOOYOO)
             });
             m.components(|c| c)
