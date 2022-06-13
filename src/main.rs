@@ -83,6 +83,18 @@ impl EventHandler for Handler {
                 });
                 commands.create_application_command(|command| {
                     command
+                        .name("avatar")
+                        .description("Get a users avatar")
+                        .create_option(|option| {
+                            option
+                                .name("user")
+                                .kind(ApplicationCommandOptionType::User)
+                                .description("The user whose avatar is requested")
+                                .required(true)
+                        })
+                });
+                commands.create_application_command(|command| {
+                    command
                         .name("vote")
                         .description("Aloita äänestys")
                         .create_option(|option| {
@@ -299,6 +311,7 @@ impl EventHandler for Handler {
                 "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
                 "github" => commands::links::github(&ctx, a.to_owned()).await,
                 "liity" => commands::links::liity(&ctx, a.to_owned()).await,
+                "avatar" => commands::links::avatar(&ctx, a.to_owned()).await,
                 "role" => commands::role::handle_interaction(&ctx, a.to_owned()).await,
                 "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
                 "vote" => commands::vote::create_vote(&ctx, a.to_owned()).await,
