@@ -267,7 +267,7 @@ impl EventHandler for Handler {
                         })
                     })
                     .await
-                    .unwrap();
+                    .ok();
             }
         }
         if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
