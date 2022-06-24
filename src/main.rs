@@ -487,7 +487,8 @@ async fn main() {
         &token,
         GatewayIntents::non_privileged()
             | GatewayIntents::GUILD_MEMBERS
-            | GatewayIntents::GUILD_PRESENCES,
+            | GatewayIntents::GUILD_PRESENCES
+            | GatewayIntents::MESSAGE_CONTENT,
     )
     .application_id(application_id)
     .framework(framework)
