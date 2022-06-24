@@ -10,6 +10,7 @@ use serenity::{
             InteractionApplicationCommandCallbackDataFlags,
             InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
         },
+        timestamp::Timestamp,
     },
     prelude::TypeMapKey,
 };
@@ -359,7 +360,7 @@ async fn get_online_mod_count(ctx: &Context) -> usize {
         .parse::<u64>()
         .expect("Invalid mod role id");
     if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
-        let precenses = ctx.cache.guild(channel.guild_id).await.unwrap().presences;
+        let precenses = ctx.cache.guild(channel.guild_id).unwrap().presences;
         let mut members = channel.members(&ctx.cache).await.unwrap();
         members.retain(|m| precenses.contains_key(&m.user.id) && !m.user.bot);
         return members.len();
@@ -376,9 +377,8 @@ async fn is_moderator(ctx: &Context, user: &User) -> bool {
     if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
         return channel
             .permissions_for_user(&ctx.cache, user)
-            .await
             .unwrap()
-            .read_messages();
+            .read_message_history();
     }
     unreachable!();
 }
@@ -464,7 +464,7 @@ async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) 
             member
                 .disable_communication_until_datetime(
                     &ctx.http,
-                    chrono::Utc::now() + chrono::Duration::weeks(1),
+                    Timestamp::from(chrono::Utc::now() + chrono::Duration::weeks(1)),
                 )
                 .await
                 .unwrap();

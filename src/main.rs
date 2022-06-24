@@ -21,12 +21,12 @@ use database::Database;
 use extensions::*;
 use serenity::{
     async_trait,
-    client::bridge::gateway::{GatewayIntents, ShardManager},
+    client::bridge::gateway::ShardManager,
     framework::{standard::macros::group, StandardFramework},
     http::Http,
     model::{
         event::{MessageUpdateEvent, ResumedEvent},
-        gateway::Ready,
+        gateway::{GatewayIntents, Ready},
         interactions::application_command::*,
         prelude::*,
     },
@@ -60,11 +60,7 @@ impl EventHandler for Handler {
             .parse()
             .expect("Invalid GUILD_ID provided");
         let guild_id = serenity::model::id::GuildId::from(guild_id);
-        let admin_role_id: u64 = env::var("ADMIN_ROLE_ID")
-            .expect("No ADMIN_ROLE_ID in .env")
-            .parse()
-            .expect("Invalid ADMIN_ROLE_ID provided");
-        let commands = guild_id
+        guild_id
             .set_application_commands(&ctx.http, |commands| {
                 commands.create_application_command(|command| {
                     command
@@ -123,7 +119,7 @@ impl EventHandler for Handler {
                     command
                         .name("giveaway")
                         .description("Luo arvonta tai hallitse käynnissä olevia arpajaisia")
-                        .default_permission(false)
+                        .default_member_permissions(Permissions::ADMINISTRATOR)
                         .create_option(|option| {
                             option
                                 .name("start")
@@ -252,24 +248,7 @@ impl EventHandler for Handler {
             })
             .await
             .unwrap();
-        for command in commands {
-            if !command.default_permission {
-                guild_id.set_application_commands_permissions(&ctx.http, |perms| {
-                        perms.create_application_command(|command_perms| {
-                            command_perms
-                                .id(command.id.0)
-                                .create_permissions(|cp| {
-                                    cp
-                                        .kind(serenity::model::interactions::application_command::ApplicationCommandPermissionType::Role)
-                                        .id(admin_role_id)
-                                        .permission(true)
-                                })
-                        })
-                    })
-                    .await
-                    .ok();
-            }
-        }
+
         if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
             let status_channel_id: ChannelId =
                 s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
@@ -412,7 +391,7 @@ impl EventHandler for Handler {
         voting::handle_delete(&ctx, message_id).await;
     }
 
-    async fn guild_member_addition(&self, ctx: Context, _guild_id: GuildId, mut member: Member) {
+    async fn guild_member_addition(&self, ctx: Context, mut member: Member) {
         info!("{} joined", member.user);
         if let Ok(is_silenced) = ctx.get_db().await.is_silenced(member.user.id.0).await {
             if is_silenced {
@@ -454,7 +433,7 @@ async fn main() {
         .expect("Expected an application id")
         .parse::<u64>()
         .expect("Invalid application id form");
-    let http = Http::new_with_token(&token);
+    let http = Http::new(&token);
 
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
@@ -504,17 +483,17 @@ async fn main() {
         .configure(|c| c.owners(owners).prefix("!"))
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token)
-        .application_id(application_id)
-        .framework(framework)
-        .event_handler(Handler)
-        .intents(
-            GatewayIntents::non_privileged()
-                | GatewayIntents::GUILD_MEMBERS
-                | GatewayIntents::GUILD_PRESENCES,
-        )
-        .await
-        .expect("Err creating client");
+    let mut client = Client::builder(
+        &token,
+        GatewayIntents::non_privileged()
+            | GatewayIntents::GUILD_MEMBERS
+            | GatewayIntents::GUILD_PRESENCES,
+    )
+    .application_id(application_id)
+    .framework(framework)
+    .event_handler(Handler)
+    .await
+    .expect("Err creating client");
 
     {
         let mut data = client.data.write().await;

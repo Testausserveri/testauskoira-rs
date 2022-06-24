@@ -223,7 +223,7 @@ pub async fn handle_component_interaction(ctx: &Context, interaction: Interactio
                         r.kind(InteractionResponseType::UpdateMessage);
                         r.interaction_response_data(|d| {
                             d.set_components(components);
-                            d.embeds(embeds)
+                            d.set_embeds(embeds)
                         })
                     })
                     .await
@@ -244,7 +244,7 @@ pub async fn handle_component_interaction(ctx: &Context, interaction: Interactio
                         r.kind(InteractionResponseType::UpdateMessage);
                         r.interaction_response_data(|d| {
                             d.set_components(components);
-                            d.embeds(embeds)
+                            d.set_embeds(embeds)
                         })
                     })
                     .await
@@ -404,7 +404,7 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
             interaction
                 .create_interaction_response(&ctx.http, |r| {
                     r.interaction_response_data(|d| {
-                        d.embeds(embeds);
+                        d.set_embeds(embeds);
                         d.set_components(generate_list_components(0, giveaways.len() as i64));
                         d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
                     })
