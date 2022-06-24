@@ -345,7 +345,7 @@ impl EventHandler for Handler {
                 if w.is_empty() {
                     continue;
                 }
-                if let Ok(r) = regex::Regex::new(w) {
+                if let Ok(r) = regex::RegexBuilder::new(w).case_insensitive(true).build() {
                     new_vec.push(r);
                 }
             }
