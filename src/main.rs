@@ -379,6 +379,21 @@ impl EventHandler for Handler {
         event: MessageUpdateEvent,
     ) {
         voting::handle_edit(&ctx, &event).await;
+
+        if let Some(msg) = event.content {
+            let mut data = ctx.data.write().await;
+            let regexes = data.get_mut::<BlacklistRegexes>().unwrap();
+
+            for re in &regexes.lock().await.regexvec {
+                if re.is_match(&msg) {
+                    ctx.http
+                        .delete_message(event.channel_id.0, event.id.0)
+                        .await
+                        .ok();
+                    return;
+                }
+            }
+        }
     }
 
     async fn message_delete(
