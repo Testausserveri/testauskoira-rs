@@ -4,11 +4,14 @@ use serenity::{
     builder::EditMessage,
     model::{
         id::UserId,
-        interactions::{
-            application_command::ApplicationCommandInteraction,
-            message_component::ButtonStyle,
-            InteractionApplicationCommandCallbackDataFlags,
-            InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
+        interactions::InteractionApplicationCommandCallbackDataFlags,
+        application::{
+            interaction::{
+                application_command::ApplicationCommandInteraction,
+                InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
+                message_component::MessageComponentInteraction,
+            },
+            component::ButtonStyle,
         },
         timestamp::Timestamp,
     },
@@ -18,7 +21,6 @@ use serenity::{
 use crate::{
     env,
     extensions::*,
-    message_component::MessageComponentInteraction,
     models::{CouncilVoting, SuspectMessageEdit, VotingAction},
     Arc, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, Mutex, User,
 };

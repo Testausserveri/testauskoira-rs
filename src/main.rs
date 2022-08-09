@@ -25,9 +25,10 @@ use serenity::{
     framework::{standard::macros::group, StandardFramework},
     http::Http,
     model::{
+        application::interaction::InteractionResponseType,
+        interactions::application_command::ApplicationCommandOptionType,
         event::{MessageUpdateEvent, ResumedEvent},
         gateway::{GatewayIntents, Ready},
-        interactions::application_command::*,
         prelude::*,
     },
     prelude::*,

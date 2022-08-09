@@ -4,11 +4,13 @@ use serenity::{
     builder::EditMessage,
     http::Http,
     model::{
-        interactions::{
+        application::interaction::{
+            InteractionResponseType::DeferredUpdateMessage,
             application_command::ApplicationCommandInteraction,
+        },
+        interactions::{
             message_component::{ButtonStyle, MessageComponentInteraction},
             InteractionApplicationCommandCallbackDataFlags,
-            InteractionResponseType::DeferredUpdateMessage,
         },
         user::User,
     },
