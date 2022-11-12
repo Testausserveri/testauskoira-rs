@@ -7,8 +7,6 @@ services:
     restart: "unless-stopped"
     depends_on:
       - testauskoira_mariadb
-    links:
-      - testauskoira_mariadb
     volumes:
       - .env:/app/.env
       - ./img:/app/img
@@ -18,10 +16,17 @@ services:
 
   testauskoira_mariadb:
     container_name: testauskoira_mariadb
-    image: mariadb
+    image: mariadb:latest
     volumes:
       - ./mariadb:/var/lib/mysql
     environment:
+      - "MARIADB_AUTO_UPGRADE=1"
       - "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=true"
     restart: "unless-stopped"
+    networks:
+      - tk-ta2
+      - default
 
+networks:
+  tk-ta2:
+    external: true
