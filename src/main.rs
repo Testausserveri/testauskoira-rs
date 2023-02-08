@@ -131,7 +131,7 @@ impl EventHandler for Handler {
                                         .name("channel")
                                         .description("Arpajaisilmoituksen kanava")
                                         .required(true)
-                                        .channel_types(&[serenity::model::channel::ChannelType::Text])
+                                        .channel_types(&[serenity::model::channel::ChannelType::Text, serenity::model::channel::ChannelType::News])
                                         .kind(ApplicationCommandOptionType::Channel)
                                 })
                                 .create_sub_option(|subopt| {
