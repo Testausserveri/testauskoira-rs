@@ -105,7 +105,7 @@ impl EventHandler for Handler {
                             option
                                 .name("options")
                                 .kind(ApplicationCommandOptionType::String)
-                                .description("Äänestyksen vaihtoehdot")
+                                .description("Äänestyksen vaihtoehdot, pilkulla erotettuina")
                                 .required(true)
                         })
                         .create_option(|option| {
