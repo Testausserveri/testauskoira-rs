@@ -26,9 +26,10 @@ use serenity::{
     http::Http,
     model::{
         application::interaction::InteractionResponseType,
-        interactions::application_command::ApplicationCommandOptionType,
+        channel::{Channel, ChannelType},
         event::{MessageUpdateEvent, ResumedEvent},
         gateway::{GatewayIntents, Ready},
+        interactions::application_command::ApplicationCommandOptionType,
         prelude::*,
     },
     prelude::*,
@@ -131,7 +132,7 @@ impl EventHandler for Handler {
                                         .name("channel")
                                         .description("Arpajaisilmoituksen kanava")
                                         .required(true)
-                                        .channel_types(&[serenity::model::channel::ChannelType::Text, serenity::model::channel::ChannelType::News])
+                                        .channel_types(&[ChannelType::Text, ChannelType::News])
                                         .kind(ApplicationCommandOptionType::Channel)
                                 })
                                 .create_sub_option(|subopt| {
@@ -365,9 +366,16 @@ impl EventHandler for Handler {
 
         if let Some(gid) = msg.guild_id {
             if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
-                db.increment_message_count(msg.author.id.as_u64())
-                    .await
-                    .ok();
+                if let Ok(Channel::Guild(c)) = msg.channel(&ctx.http).await {
+                    match c.kind {
+                        ChannelType::PrivateThread => {}
+                        _ => {
+                            db.increment_message_count(msg.author.id.as_u64())
+                                .await
+                                .ok();
+                        }
+                    }
+                }
             };
         }
     }
