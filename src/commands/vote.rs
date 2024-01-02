@@ -5,8 +5,8 @@ use serenity::{
     http::Http,
     model::{
         application::interaction::{
-            InteractionResponseType::DeferredUpdateMessage,
             application_command::ApplicationCommandInteraction,
+            InteractionResponseType::DeferredUpdateMessage,
         },
         interactions::{
             message_component::{ButtonStyle, MessageComponentInteraction},
@@ -175,10 +175,10 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
     title.truncate(255);
     let mut options = options
         .split(',')
-        .map(|o| &o[0..std::cmp::min(o.len(), 32)])
-        .collect::<Vec<&str>>();
+        .map(|o| o.trim().chars().take(32).collect::<String>())
+        .filter(|o| !o.is_empty())
+        .collect::<Vec<_>>();
     options.dedup();
-    options.retain(|o| !o.trim().is_empty());
     if options.len() < 2 {
         interaction
             .create_interaction_response(&ctx.http, |r| {
@@ -211,10 +211,13 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
         .get_vote_event_from_message_id(vote_message.id.0)
         .unwrap();
     let vote_options = db.get_options_by_vote_id(vote_id).unwrap();
-    let Ok(_) = vote_message.edit(&ctx.http, |m| {
-        generate_vote_message(m, vote_event, Vec::new(), vote_options, &interaction.user);
-        m
-    }).await else {
+    let Ok(_) = vote_message
+        .edit(&ctx.http, |m| {
+            generate_vote_message(m, vote_event, Vec::new(), vote_options, &interaction.user);
+            m
+        })
+        .await
+    else {
         db.purge_vote(vote_id).unwrap();
         interaction
             .create_interaction_response(&ctx.http, |r| {
@@ -222,8 +225,10 @@ pub async fn create_vote(ctx: &Context, interaction: ApplicationCommandInteracti
                     d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
                     d.content("Invalid request, perhaps included too many options")
                 })
-            }).await.unwrap();
-            return vote_message.delete(&ctx.http).await.unwrap();
+            })
+            .await
+            .unwrap();
+        return vote_message.delete(&ctx.http).await.unwrap();
     };
     interaction
         .create_interaction_response(&ctx.http, |r| {

@@ -11,7 +11,7 @@ impl Database {
         author_id: u64,
         title: &str,
         duration: u32,
-        options: Vec<&str>,
+        options: Vec<String>,
     ) -> Result<i32, anyhow::Error> {
         let event = NewVoteEvent {
             channel_id,
