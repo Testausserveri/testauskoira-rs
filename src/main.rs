@@ -365,7 +365,7 @@ impl EventHandler for Handler {
         }
 
         if let Some(gid) = msg.guild_id {
-            if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() {
+            if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() && !msg.author.bot {
                 if let Ok(Channel::Guild(c)) = msg.channel(&ctx.http).await {
                     match c.kind {
                         ChannelType::PrivateThread => {}
