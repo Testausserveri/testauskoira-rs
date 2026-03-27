@@ -4,7 +4,7 @@ pub mod giveaway_updater;
 use std::sync::Arc;
 
 use clokwerk::{AsyncScheduler, Job, TimeUnits};
-use serenity::http::Http;
+use poise::serenity_prelude::Http;
 
 use crate::{
     database::Database,

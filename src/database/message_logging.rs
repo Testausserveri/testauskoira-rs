@@ -6,7 +6,7 @@ use crate::models::*;
 impl Database {
     pub async fn increment_message_count(&self, in_userid: &u64) -> Result<usize, anyhow::Error> {
         // FIXME: This could be optimized if necessary
-        let curdate = chrono::Local::today().naive_local();
+        let curdate = chrono::Local::now().date_naive();
         use crate::schema::messages_day_stat::dsl::*;
         let current_count = messages_day_stat
             .filter(userid.eq(in_userid.to_string()).and(date.eq(curdate)))
@@ -34,7 +34,7 @@ impl Database {
         })
     }
     pub async fn get_total_daily_messages(&self, offset: i32) -> Result<i64, anyhow::Error> {
-        let curdate = chrono::Local::today().naive_local() - chrono::Duration::days(offset.into());
+        let curdate = chrono::Local::now().date_naive() - chrono::Duration::days(offset.into());
         use crate::schema::messages_day_stat::dsl::*;
 
         let value = messages_day_stat
@@ -65,7 +65,7 @@ impl Database {
         };
         let blacklist = blacklist.lines();
         let curdate =
-            chrono::Local::today().naive_local() - chrono::Duration::days(days_pre.into());
+            chrono::Local::now().date_naive() - chrono::Duration::days(days_pre.into());
 
         use crate::schema::messages_day_stat::dsl::*;
 
@@ -84,7 +84,7 @@ impl Database {
     }
 
     pub async fn get_total_message_average(&self, offset: i32) -> Result<f32, anyhow::Error> {
-        let curdate = chrono::Local::today().naive_local() - chrono::Duration::days(offset.into());
+        let curdate = chrono::Local::now().date_naive() - chrono::Duration::days(offset.into());
         use crate::schema::messages_day_stat::dsl::*;
 
         let mut res = messages_day_stat
@@ -107,7 +107,7 @@ impl Database {
     }
 
     pub async fn new_winner(&self, id: u64) -> Result<usize, anyhow::Error> {
-        let curdate = chrono::Local::today().naive_local();
+        let curdate = chrono::Local::now().date_naive();
         let new_winner = NewAwardWinner {
             user_id: id,
             date: curdate,

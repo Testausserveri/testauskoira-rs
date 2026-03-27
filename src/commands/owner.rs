@@ -1,36 +1,22 @@
-use serenity::{
-    framework::standard::{macros::command, Args, CommandResult},
-    model::prelude::*,
-    prelude::*,
-};
+use crate::{events::activity_award::display_winner, Context, Error};
 
-use crate::{events::activity_award::display_winner, extensions::*, ShardManagerContainer};
-
-#[command]
-#[owners_only]
-async fn quit(ctx: &Context, msg: &Message) -> CommandResult {
-    let data = ctx.data.read().await;
-
-    if let Some(manager) = data.get::<ShardManagerContainer>() {
-        msg.reply(ctx, "Shutting down").await?;
-        manager.lock().await.shutdown_all().await;
-    } else {
-        msg.reply(ctx, "There was a problem getting the shard manager")
-            .await?;
-    }
-
+/// Shut down the bot
+#[poise::command(prefix_command, owners_only)]
+pub async fn quit(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.say("Shutting down").await?;
+    ctx.framework().shard_manager().shutdown_all().await;
     Ok(())
 }
 
-#[command]
-#[owners_only]
-async fn award_ceremony(ctx: &Context, _msg: &Message, mut args: Args) -> CommandResult {
-    let offset = match args.single::<i32>() {
-        Ok(a) => a,
-        _ => 0,
-    };
-    let db = ctx.get_db().await;
-    let http = ctx.http.to_owned();
+/// Manually trigger the daily award ceremony
+#[poise::command(prefix_command, owners_only)]
+pub async fn award_ceremony(
+    ctx: Context<'_>,
+    #[description = "Day offset"] offset: Option<i32>,
+) -> Result<(), Error> {
+    let offset = offset.unwrap_or(0);
+    let db = ctx.data().db.clone();
+    let http = ctx.serenity_context().http.clone();
     display_winner(http, db, offset).await;
     Ok(())
 }

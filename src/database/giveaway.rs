@@ -2,7 +2,8 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 use super::Database;
-use crate::{models::*, Message};
+use crate::models::*;
+use poise::serenity_prelude::Message;
 
 impl Database {
     pub async fn start_giveaway<S: Into<String>>(
@@ -14,8 +15,8 @@ impl Database {
     ) -> Result<i64, anyhow::Error> {
         use crate::schema::{Giveaways as GiveawaysSchema, Giveaways::dsl::Giveaways};
         let giveaway = NewGiveaway {
-            message_id: message.id.0,
-            channel_id: message.channel_id.0,
+            message_id: message.id.get(),
+            channel_id: message.channel_id.get(),
             end_time,
             max_winners,
             prize: prize.into(),
@@ -26,7 +27,7 @@ impl Database {
             .execute(&self.pool.get()?)?;
 
         Ok(Giveaways
-            .filter(GiveawaysSchema::message_id.eq(message.id.0))
+            .filter(GiveawaysSchema::message_id.eq(message.id.get()))
             .select(GiveawaysSchema::id)
             .first::<i64>(&self.pool.get()?)?)
     }

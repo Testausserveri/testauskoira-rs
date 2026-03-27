@@ -1,9 +1,6 @@
-#![feature(let_else)]
-
 mod commands;
 mod database;
 mod events;
-mod extensions;
 mod models;
 mod schema;
 mod voting;
@@ -13,435 +10,211 @@ extern crate tracing;
 #[macro_use]
 extern crate diesel;
 
-use std::{collections::HashSet, env, sync::Arc};
+use poise::serenity_prelude as serenity;
+use std::{collections::HashMap, env, sync::Arc};
+use tokio::sync::Mutex;
 
-use clokwerk::AsyncScheduler;
-use commands::owner::*;
 use database::Database;
-use extensions::*;
-use serenity::{
-    async_trait,
-    client::bridge::gateway::ShardManager,
-    framework::{standard::macros::group, StandardFramework},
-    http::Http,
-    model::{
-        application::interaction::InteractionResponseType,
-        channel::{Channel, ChannelType},
-        event::{MessageUpdateEvent, ResumedEvent},
-        gateway::{GatewayIntents, Ready},
-        interactions::application_command::ApplicationCommandOptionType,
-        prelude::*,
-    },
-    prelude::*,
-};
 use voting::PendingEdits;
-
-pub struct ShardManagerContainer;
-
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
 
 pub struct BlacklistRegexes {
     last_edited: std::time::SystemTime,
     regexvec: Vec<regex::Regex>,
 }
 
-impl TypeMapKey for BlacklistRegexes {
-    type Value = Arc<Mutex<BlacklistRegexes>>;
+pub struct Data {
+    pub db: Arc<Database>,
+    pub blacklist: Arc<Mutex<BlacklistRegexes>>,
+    pub pending_edits: Arc<Mutex<PendingEdits>>,
+    pub list_offsets: Arc<Mutex<HashMap<u64, i64>>>,
 }
 
-struct Handler;
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("Connected as {}", ready.user.name);
-        let guild_id: u64 = env::var("GUILD_ID")
-            .expect("No GUILD_ID in .env")
-            .parse()
-            .expect("Invalid GUILD_ID provided");
-        let guild_id = serenity::model::id::GuildId::from(guild_id);
-        guild_id
-            .set_application_commands(&ctx.http, |commands| {
-                commands.create_application_command(|command| {
-                    command
-                        .name("github")
-                        .description("Saa kutsu Testausserverin GitHub-organisaatioon")
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("liity")
-                        .description("Täytä jäsenhakemus liittyäksesi Testausserveri ry:n jäseneksi")
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("role")
-                        .description("Valitse itsellesi mieluisia rooleja")
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("avatar")
-                        .description("Get a users avatar")
-                        .create_option(|option| {
-                            option
-                                .name("user")
-                                .kind(ApplicationCommandOptionType::User)
-                                .description("The user whose avatar is requested")
-                                .required(true)
-                        })
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("vote")
-                        .description("Aloita äänestys")
-                        .create_option(|option| {
-                            option
-                                .name("title")
-                                .kind(ApplicationCommandOptionType::String)
-                                .description("Äänestyksen aihe")
-                                .required(true)
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("options")
-                                .kind(ApplicationCommandOptionType::String)
-                                .description("Äänestyksen vaihtoehdot, pilkulla erotettuina")
-                                .required(true)
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("duration")
-                                .kind(ApplicationCommandOptionType::Integer)
-                                .description("Äänestyksen kesto sekunneissa")
-                                .required(true)
-                        })
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("giveaway")
-                        .description("Luo arvonta tai hallitse käynnissä olevia arpajaisia")
-                        .default_member_permissions(Permissions::ADMINISTRATOR)
-                        .create_option(|option| {
-                            option
-                                .name("start")
-                                .description("Luo ja aloita arvonta")
-                                .kind(ApplicationCommandOptionType::SubCommand)
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("channel")
-                                        .description("Arpajaisilmoituksen kanava")
-                                        .required(true)
-                                        .channel_types(&[ChannelType::Text, ChannelType::News])
-                                        .kind(ApplicationCommandOptionType::Channel)
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("duration")
-                                        .description("Arpajaisten kesto (sekunneissa)")
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("winners")
-                                        .description("Arpajaisten voittajien lukumäärä")
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                                        .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("prize")
-                                        .description("Arpajaisten palkinto")
-                                        .kind(ApplicationCommandOptionType::String)
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("mention")
-                                        .description("Rooli joka mainitaan arpajaisilmoituksessa")
-                                        .kind(ApplicationCommandOptionType::Role)
-                                })
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("list")
-                                .description("Luetteloi arpajaiset")
-                                .kind(ApplicationCommandOptionType::SubCommand)
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("reroll")
-                                .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Arvo uudelleen arpajaisten voittaja(t)")
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("giveaway_id")
-                                        .required(true)
-                                        .description("Arvonnan tunniste")
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("allow_past")
-                                        .description("Salli entisten voittajien uudelleenvalitseminen, oletus = false")
-                                        .kind(ApplicationCommandOptionType::Boolean)
-                                })
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("edit")
-                                .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Muokkaa arpajaisia")
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("giveaway_id")
-                                        .required(true)
-                                        .description("Arvonnan tunniste")
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("field")
-                                        .required(true)
-                                        .description("Muokattava ominaisuus")
-                                        .kind(ApplicationCommandOptionType::String)
-                                        .add_string_choice("Arpajaisten kesto", "duration")
-                                        .add_string_choice("Arpajaisten voittajien lukumäärä", "winners")
-                                })
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("new_value")
-                                        .required(true)
-                                        .description("Uusi arvo")
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                        })
-                        .create_option(|option| {
-                            option
-                                .name("end")
-                                .kind(ApplicationCommandOptionType::SubCommand)
-                                .description("Lopeta arpajaiset")
-                                .create_sub_option(|subopt| {
-                                    subopt
-                                        .name("giveaway_id")
-                                        .description("Arvonnan tunniste")
-                                        .required(true)
-                                        .kind(ApplicationCommandOptionType::Integer)
-                                })
-                        })
-                        .create_option(|option| {
-                                    option
-                                        .name("delete")
-                                        .kind(ApplicationCommandOptionType::SubCommand)
-                                        .description("Poista arpajaiset")
-                                        .create_sub_option(|subopt| {
-                                            subopt
-                                                .name("giveaway_id")
-                                                .description("Arvonnan tunniste")
-                                                .required(true)
-                                                .kind(ApplicationCommandOptionType::Integer)
-                                        })
-                                })
+async fn event_handler(
+    ctx: &serenity::Context,
+    event: &serenity::FullEvent,
+    _framework: poise::FrameworkContext<'_, Data, Error>,
+    data: &Data,
+) -> Result<(), Error> {
+    match event {
+        serenity::FullEvent::Message { new_message } => {
+            handle_message(ctx, data, new_message).await;
+        }
+        serenity::FullEvent::MessageUpdate {
+            event,
+            old_if_available: _,
+            new: _,
+        } => {
+            voting::handle_edit(ctx, data, event).await;
 
-                });
-                commands.create_application_command(|command| {
-                    command
-                        .name("⛔ Ilmianna viesti")
-                        .kind(application_command::ApplicationCommandType::Message)
-                })
-            })
-            .await
-            .unwrap();
-
-        if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
-            let status_channel_id: ChannelId =
-                s.parse().expect("Invalid STATUS_CHANNEL_ID provided");
-            status_channel_id
-                .send_message(&ctx.http, |m| {
-                    m.content(format!(
-                        "Testauskoira on herännyt ja valmiina toimintaan! `{}`",
-                        env!("GIT_HASH")
-                    ))
-                })
-                .await
-                .unwrap();
-        };
-    }
-
-    async fn guild_member_update(&self, ctx: Context, old: Option<Member>, new: Member) {
-        if let Some(old_member) = old {
-            let silence_role = env::var("SILENCED_ROLE_ID")
-                .expect("No SILENCED_ROLE_ID in env")
-                .parse::<u64>()
-                .unwrap();
-            let old_silence = old_member.roles.contains(&RoleId(silence_role));
-            let new_silence = new.roles.contains(&RoleId(silence_role));
-            if new_silence && !old_silence {
-                let db = ctx.get_db().await;
-                info!("Silencing user: {}", &new.user);
-                db.silence_user(new.user.id.0).await.ok();
-            } else if old_silence && !new_silence {
-                let db = ctx.get_db().await;
-                info!("un-silencing user: {}", &new.user);
-                db.unsilence_user(new.user.id.0).await.ok();
+            if let Some(ref msg) = event.content {
+                let regexes = data.blacklist.lock().await;
+                for re in &regexes.regexvec {
+                    if re.is_match(msg) {
+                        ctx.http
+                            .delete_message(event.channel_id, event.id, None)
+                            .await
+                            .ok();
+                        return Ok(());
+                    }
+                }
             }
         }
-    }
-
-    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        match interaction {
-            Interaction::ApplicationCommand(ref a) => match a.data.name.as_ref() {
-                "⛔ Ilmianna viesti" => voting::handle_report(&ctx, a.to_owned()).await,
-                "github" => commands::links::github(&ctx, a.to_owned()).await,
-                "liity" => commands::links::liity(&ctx, a.to_owned()).await,
-                "avatar" => commands::links::avatar(&ctx, a.to_owned()).await,
-                "role" => commands::role::handle_interaction(&ctx, a.to_owned()).await,
-                "giveaway" => commands::giveaway::handle_interaction(&ctx, a.to_owned()).await,
-                "vote" => commands::vote::create_vote(&ctx, a.to_owned()).await,
-                _ => info!("Ignoring unknown interaction: `{}`", &a.data.name),
-            },
-            Interaction::MessageComponent(ref b) => match b.data.custom_id.as_str() {
-                "give_role_menu" => commands::role::handle_menu_button(&ctx, b.to_owned()).await,
-                _ => {
-                    if b.data.custom_id.as_str().starts_with("vote_") {
-                        commands::vote::user_vote(&ctx, b.to_owned()).await;
-                    } else {
-                        voting::handle_vote_interaction(&ctx, interaction.clone()).await;
-                        commands::giveaway::handle_component_interaction(&ctx, interaction.clone())
+        serenity::FullEvent::MessageDelete {
+            deleted_message_id,
+            channel_id: _,
+            guild_id: _,
+        } => {
+            voting::handle_delete(ctx, data, *deleted_message_id).await;
+        }
+        serenity::FullEvent::GuildMemberUpdate {
+            old_if_available,
+            new,
+            event: _,
+        } => {
+            if let (Some(old_member), Some(new_member)) = (old_if_available, new) {
+                let silence_role = env::var("SILENCED_ROLE_ID")
+                    .expect("No SILENCED_ROLE_ID in env")
+                    .parse::<u64>()
+                    .unwrap();
+                let silence_role_id = serenity::RoleId::new(silence_role);
+                let old_silence = old_member.roles.contains(&silence_role_id);
+                let new_silence = new_member.roles.contains(&silence_role_id);
+                if new_silence && !old_silence {
+                    info!("Silencing user: {}", &new_member.user);
+                    data.db.silence_user(new_member.user.id.get()).await.ok();
+                } else if old_silence && !new_silence {
+                    info!("un-silencing user: {}", &new_member.user);
+                    data.db.unsilence_user(new_member.user.id.get()).await.ok();
+                }
+            }
+        }
+        serenity::FullEvent::GuildMemberAddition { new_member } => {
+            info!("{} joined", new_member.user);
+            let member = new_member.clone();
+            if let Ok(is_silenced) = data.db.is_silenced(member.user.id.get()).await {
+                if is_silenced {
+                    info!("Adding silenced role to user {}", member.user);
+                    let silence_role = env::var("SILENCED_ROLE_ID")
+                        .expect("Expected SILENCED_ROLE_ID in .env")
+                        .parse::<u64>()
+                        .expect("Invalid SILENCED_ROLE_ID");
+                    member
+                        .add_role(&ctx.http, serenity::RoleId::new(silence_role))
+                        .await
+                        .unwrap();
+                }
+            }
+            let member_role = env::var("MEMBER_ROLE_ID")
+                .expect("member role id not found in $MEMBER_ROLE_ID")
+                .parse::<u64>()
+                .expect("Invalid member role id");
+            member
+                .add_role(&ctx.http, serenity::RoleId::new(member_role))
+                .await
+                .ok();
+        }
+        serenity::FullEvent::InteractionCreate { interaction } => {
+            if let serenity::Interaction::Component(component) = interaction {
+                match component.data.custom_id.as_str() {
+                    "give_role_menu" => {
+                        commands::role::handle_menu_button(ctx, component.clone()).await;
+                    }
+                    "delete_button" | "ban_button" | "abuse_button" | "useless_button" => {
+                        voting::handle_vote_interaction(ctx, data, component.clone()).await;
+                    }
+                    id if id.starts_with("vote_") => {
+                        commands::vote::user_vote(ctx, data, component.clone()).await;
+                    }
+                    id if id.starts_with("GIVEAWAY_") => {
+                        commands::giveaway::handle_component_interaction(ctx, data, component.clone())
                             .await;
                     }
-                }
-            },
-            _ => {}
-        };
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-        let db = ctx.get_db().await;
-
-        // FIXME: Store in memory
-        let mut data = ctx.data.write().await;
-        let regexes = data.get_mut::<BlacklistRegexes>().unwrap();
-
-        let last_edited = std::fs::metadata("blacklist.txt")
-            .unwrap()
-            .modified()
-            .unwrap();
-
-        if last_edited != regexes.lock().await.last_edited {
-            let words = match std::fs::read_to_string("blacklist.txt") {
-                Ok(s) => s,
-                Err(e) => {
-                    match e.kind() {
-                        std::io::ErrorKind::NotFound => {
-                            std::fs::File::create("blacklist.txt")
-                                .expect("Unable to create blacklist.txt");
-                        }
-                        _ => panic!("Unable to access blacklist.txt"),
+                    _ => {
+                        debug!("Unknown component interaction: {}", component.data.custom_id);
                     }
-                    String::new()
-                }
-            };
-
-            info!("Generating new blacklist regexes");
-            let mut new_vec = Vec::new();
-            for w in words.lines() {
-                if w.is_empty() {
-                    continue;
-                }
-                if let Ok(r) = regex::RegexBuilder::new(w).case_insensitive(true).build() {
-                    new_vec.push(r);
                 }
             }
-            *regexes.lock().await = BlacklistRegexes {
-                last_edited,
-                regexvec: new_vec,
-            };
         }
+        serenity::FullEvent::Resume { .. } => {
+            info!("Resumed");
+        }
+        _ => {}
+    }
+    Ok(())
+}
 
-        for re in &regexes.lock().await.regexvec {
+async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Message) {
+    // Check and reload blacklist regexes if file changed
+    {
+        let last_edited = std::fs::metadata("blacklist.txt")
+            .and_then(|m| m.modified())
+            .ok();
+
+        if let Some(last_edited) = last_edited {
+            let mut regexes = data.blacklist.lock().await;
+            if last_edited != regexes.last_edited {
+                let words = match std::fs::read_to_string("blacklist.txt") {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            std::fs::File::create("blacklist.txt")
+                                .expect("Unable to create blacklist.txt");
+                        } else {
+                            panic!("Unable to access blacklist.txt");
+                        }
+                        String::new()
+                    }
+                };
+
+                info!("Generating new blacklist regexes");
+                let mut new_vec = Vec::new();
+                for w in words.lines() {
+                    if w.is_empty() {
+                        continue;
+                    }
+                    if let Ok(r) = regex::RegexBuilder::new(w).case_insensitive(true).build() {
+                        new_vec.push(r);
+                    }
+                }
+                *regexes = BlacklistRegexes {
+                    last_edited,
+                    regexvec: new_vec,
+                };
+            }
+        }
+    }
+
+    // Check blacklist
+    {
+        let regexes = data.blacklist.lock().await;
+        for re in &regexes.regexvec {
             if re.is_match(&msg.content) {
                 msg.delete(&ctx.http).await.ok();
                 return;
             }
         }
+    }
 
-        if let Some(gid) = msg.guild_id {
-            if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() && !msg.author.bot {
-                if let Ok(Channel::Guild(c)) = msg.channel(&ctx.http).await {
-                    match c.kind {
-                        ChannelType::PrivateThread => {}
-                        _ => {
-                            db.increment_message_count(msg.author.id.as_u64())
-                                .await
-                                .ok();
-                        }
+    // Increment message count
+    if let Some(gid) = msg.guild_id {
+        if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() && !msg.author.bot {
+            if let Ok(serenity::Channel::Guild(c)) = msg.channel(&ctx.http).await {
+                match c.kind {
+                    serenity::ChannelType::PrivateThread => {}
+                    _ => {
+                        data.db
+                            .increment_message_count(&msg.author.id.get())
+                            .await
+                            .ok();
                     }
                 }
-            };
-        }
-    }
-
-    async fn message_update(
-        &self,
-        ctx: Context,
-        _: Option<Message>,
-        _: Option<Message>,
-        event: MessageUpdateEvent,
-    ) {
-        voting::handle_edit(&ctx, &event).await;
-
-        if let Some(msg) = event.content {
-            let mut data = ctx.data.write().await;
-            let regexes = data.get_mut::<BlacklistRegexes>().unwrap();
-
-            for re in &regexes.lock().await.regexvec {
-                if re.is_match(&msg) {
-                    ctx.http
-                        .delete_message(event.channel_id.0, event.id.0)
-                        .await
-                        .ok();
-                    return;
-                }
             }
         }
-    }
-
-    async fn message_delete(
-        &self,
-        ctx: Context,
-        _: ChannelId,
-        message_id: MessageId,
-        _: Option<GuildId>,
-    ) {
-        voting::handle_delete(&ctx, message_id).await;
-    }
-
-    async fn guild_member_addition(&self, ctx: Context, mut member: Member) {
-        info!("{} joined", member.user);
-        if let Ok(is_silenced) = ctx.get_db().await.is_silenced(member.user.id.0).await {
-            if is_silenced {
-                info!("Adding silenced role to user {}", member.user);
-                let silence_role = env::var("SILENCED_ROLE_ID")
-                    .expect("Expected SILENCED_ROLE_ID in .env")
-                    .parse::<u64>()
-                    .expect("Invalid SILENCED_ROLE_ID");
-                member.add_role(&ctx.http, silence_role).await.unwrap();
-            }
-        }
-        let member_role = env::var("MEMBER_ROLE_ID")
-            .expect("member role id not found in $MEMBER_ROLE_ID")
-            .parse::<u64>()
-            .expect("Invalid member role id");
-        member.clone().add_role(&ctx.http, member_role).await.ok();
-    }
-
-    async fn resume(&self, _: Context, _: ResumedEvent) {
-        info!("Resumed");
     }
 }
-
-#[group]
-#[commands(quit, award_ceremony)]
-struct General;
 
 #[tokio::main]
 async fn main() {
@@ -453,37 +226,20 @@ async fn main() {
     let pending_edits = PendingEdits::new();
 
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    let application_id = env::var("APPLICATION_ID")
-        .expect("Expected an application id")
-        .parse::<u64>()
-        .expect("Invalid application id form");
-    let http = Http::new(&token);
-
-    let (owners, _bot_id) = match http.get_current_application_info().await {
-        Ok(info) => {
-            let mut owners = HashSet::new();
-            owners.insert(info.owner.id);
-
-            (owners, info.id)
-        }
-        Err(why) => panic!("Could not access application info: {:?}", why),
-    };
 
     let words = match std::fs::read_to_string("blacklist.txt") {
         Ok(s) => s,
         Err(e) => {
-            match e.kind() {
-                std::io::ErrorKind::NotFound => {
-                    std::fs::File::create("blacklist.txt").expect("Unable to create blacklist.txt");
-                }
-                _ => panic!("Unable to access blacklist.txt"),
+            if e.kind() == std::io::ErrorKind::NotFound {
+                std::fs::File::create("blacklist.txt").expect("Unable to create blacklist.txt");
+            } else {
+                panic!("Unable to access blacklist.txt");
             }
             String::new()
         }
     };
 
     let mut regexvec = Vec::new();
-
     for w in words.lines() {
         if w.is_empty() {
             continue;
@@ -503,51 +259,99 @@ async fn main() {
         regexvec,
     };
 
-    let framework = StandardFramework::new()
-        .configure(|c| c.owners(owners).prefix("!"))
-        .group(&GENERAL_GROUP);
+    let db_for_scheduler = database.clone();
 
-    let mut client = Client::builder(
-        &token,
-        GatewayIntents::non_privileged()
-            | GatewayIntents::GUILD_MEMBERS
-            | GatewayIntents::GUILD_PRESENCES
-            | GatewayIntents::MESSAGE_CONTENT,
-    )
-    .application_id(application_id)
-    .framework(framework)
-    .event_handler(Handler)
-    .await
-    .expect("Err creating client");
+    let data = Data {
+        db: database,
+        blacklist: Arc::new(Mutex::new(blacklist)),
+        pending_edits: Arc::new(Mutex::new(pending_edits)),
+        list_offsets: Arc::new(Mutex::new(HashMap::new())),
+    };
 
-    {
-        let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<Database>(database.clone());
-        data.insert::<BlacklistRegexes>(Arc::new(Mutex::new(blacklist)));
-        data.insert::<PendingEdits>(Arc::new(Mutex::new(pending_edits)));
-    }
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![
+                commands::links::github(),
+                commands::links::liity(),
+                commands::links::avatar(),
+                commands::role::role(),
+                commands::vote::vote(),
+                commands::giveaway::giveaway(),
+                commands::owner::quit(),
+                commands::owner::award_ceremony(),
+                voting::report_message(),
+            ],
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some("!".into()),
+                ..Default::default()
+            },
+            event_handler: |ctx, event, framework, data| {
+                Box::pin(event_handler(ctx, event, framework, data))
+            },
+            ..Default::default()
+        })
+        .setup(move |ctx, _ready, framework| {
+            Box::pin(async move {
+                let guild_id = serenity::GuildId::new(
+                    env::var("GUILD_ID")
+                        .expect("No GUILD_ID in .env")
+                        .parse()
+                        .expect("Invalid GUILD_ID provided"),
+                );
+                poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id)
+                    .await?;
 
-    let shard_manager = client.shard_manager.clone();
+                info!("Connected and commands registered");
 
-    let http = client.cache_and_http.http.clone();
+                if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
+                    let status_channel_id = serenity::ChannelId::new(
+                        s.parse().expect("Invalid STATUS_CHANNEL_ID provided"),
+                    );
+                    status_channel_id
+                        .send_message(
+                            &ctx.http,
+                            serenity::CreateMessage::new().content(format!(
+                                "Testauskoira on herännyt ja valmiina toimintaan! `{}`",
+                                env!("GIT_HASH")
+                            )),
+                        )
+                        .await
+                        .unwrap();
+                }
 
-    let mut scheduler = AsyncScheduler::with_tz(chrono::Local);
+                // Setup schedulers
+                let http = ctx.http.clone();
+                let mut scheduler =
+                    clokwerk::AsyncScheduler::with_tz(chrono::Local);
+                events::setup_schedulers(&mut scheduler, http, db_for_scheduler);
 
-    events::setup_schedulers(&mut scheduler, http.clone(), database.clone());
+                tokio::spawn(async move {
+                    loop {
+                        scheduler.run_pending().await;
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    }
+                });
 
-    tokio::spawn(async move {
-        loop {
-            scheduler.run_pending().await;
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-    });
+                Ok(data)
+            })
+        })
+        .build();
+
+    let intents = serenity::GatewayIntents::non_privileged()
+        | serenity::GatewayIntents::GUILD_MEMBERS
+        | serenity::GatewayIntents::GUILD_PRESENCES
+        | serenity::GatewayIntents::MESSAGE_CONTENT;
+
+    let mut client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await
+        .expect("Err creating client");
 
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
+        std::process::exit(0);
     });
 
     if let Err(e) = client.start().await {

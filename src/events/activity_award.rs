@@ -1,10 +1,11 @@
 use std::{env, io::Cursor, sync::Arc};
 
 use futures::prelude::*;
-use serenity::{http::client::Http, model::id::ChannelId};
+use poise::serenity_prelude::{ChannelId, Colour, CreateAttachment, CreateEmbed, CreateMessage, Http};
 use tracing::error;
 
 use crate::database::Database;
+
 async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     let award_role_id: u64 = env::var("AWARD_ROLE_ID")
         .expect("No AWARD_ROLE_ID in .env")
@@ -16,8 +17,14 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
         .parse()
         .expect("Invalid GUILD_ID provided");
 
+    let guild_id = poise::serenity_prelude::GuildId::new(guild_id);
+    let award_role_id = poise::serenity_prelude::RoleId::new(award_role_id);
+
     if let Ok(previous_winner) = db.get_last_winner().await {
-        if let Ok(mut member) = http.get_member(guild_id, previous_winner).await {
+        if let Ok(member) = http
+            .get_member(guild_id, poise::serenity_prelude::UserId::new(previous_winner))
+            .await
+        {
             member.remove_role(http, award_role_id).await.ok();
         } else {
             info!("Cannot get the member info of the previous winner");
@@ -25,7 +32,10 @@ async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
     } else {
         info!("No previous winner found");
     }
-    let mut winner_member = http.get_member(guild_id, winner).await.unwrap();
+    let winner_member = http
+        .get_member(guild_id, poise::serenity_prelude::UserId::new(winner))
+        .await
+        .unwrap();
     winner_member.add_role(http, award_role_id).await.unwrap();
     db.new_winner(winner).await.ok();
 }
@@ -36,7 +46,7 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
     let total_msgs = db.get_total_daily_messages(offset).await.unwrap();
     let messages_average = db.get_total_message_average(offset).await.unwrap();
 
-    let channel = ChannelId::from(
+    let channel = ChannelId::new(
         env::var("AWARD_CHANNEL_ID")
             .unwrap()
             .parse::<u64>()
@@ -60,108 +70,74 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
         .collect::<Vec<_>>()
         .await;
 
+    let build_embed = |winners: &Vec<(
+        Result<poise::serenity_prelude::Member, poise::serenity_prelude::Error>,
+        i32,
+    )>| {
+        let mut e = CreateEmbed::new()
+            .title("Eilisen aktiivisimmat jäsenet")
+            .description(format!(
+                "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
+                &total_msgs,
+                total_msgs as f32 / messages_average * 100f32
+            ))
+            .colour(Colour::from_rgb(68, 82, 130));
+
+        for (ranking, (member, msg_count)) in winners.iter().enumerate() {
+            let msg_percent = msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
+            match member {
+                Ok(m) => {
+                    e = e.field(
+                        format!("Sijalla {}.", ranking),
+                        format!("{}, {} viestiä ({:.1} %)", m, msg_count, msg_percent),
+                        false,
+                    );
+                }
+                Err(err) => {
+                    e = e.field(
+                        format!("Sijalla {}.", ranking),
+                        format!(
+                            "Entinen jäsen, {} viestiä ({:.1} %)",
+                            msg_count, msg_percent
+                        ),
+                        false,
+                    );
+                    error!("{}", err);
+                }
+            };
+        }
+        e
+    };
+
     match &winners[0].0.as_ref() {
         Ok(winner) => {
             let img_name = build_award_image(&winner.face()).await;
 
-            give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.0).await;
+            give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.get())
+                .await;
 
-            channel
-                .send_message(&http, |m| {
-                    if img_name.is_ok() {
-                        m.add_file(std::path::Path::new(img_name.as_ref().unwrap()));
-                    }
-                    m.embed(|e| {
-                        e.title("Eilisen aktiivisimmat jäsenet");
-                        e.description(format!(
-                            "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
-                            &total_msgs,
-                            total_msgs as f32 / messages_average * 100f32
-                        ));
-                        e.color(serenity::utils::Color::from_rgb(68, 82, 130));
-                        if img_name.is_ok() {
-                            e.image(format!("attachment://{}", &img_name.as_ref().unwrap()));
-                        }
-                        winners
-                            .iter()
-                            .enumerate()
-                            .for_each(|(ranking, (member, msg_count))| {
-                                let msg_percent =
-                                    msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
-                                match member {
-                                    Ok(m) => {
-                                        e.field(
-                                            format!("Sijalla {}.", ranking),
-                                            format!(
-                                                "{}, {} viestiä ({:.1} %)",
-                                                m, msg_count, msg_percent
-                                            ),
-                                            false,
-                                        );
-                                    }
-                                    Err(err) => {
-                                        e.field(
-                                            format!("Sijalla {}.", ranking),
-                                            format!(
-                                                "Entinen jäsen, {} viestiä ({:.1} %)",
-                                                msg_count, msg_percent
-                                            ),
-                                            false,
-                                        );
-                                        error!("{}", err);
-                                    }
-                                };
-                            });
-                        e
-                    })
-                })
-                .await
-                .unwrap();
+            let embed = build_embed(&winners);
+
+            let mut msg_builder = CreateMessage::new();
+            if let Ok(ref img) = img_name {
+                let attachment = CreateAttachment::path(img).await;
+                if let Ok(attachment) = attachment {
+                    msg_builder = msg_builder.add_file(attachment);
+                    let embed = embed.image(format!("attachment://{}", img));
+                    msg_builder = msg_builder.embed(embed);
+                } else {
+                    msg_builder = msg_builder.embed(embed);
+                }
+            } else {
+                msg_builder = msg_builder.embed(embed);
+            }
+
+            channel.send_message(&http, msg_builder).await.unwrap();
         }
         Err(_) => {
+            let embed = build_embed(&winners);
             channel
-                .send_message(&http, |m| {
-                    m.embed(|e| {
-                        e.title("Eilisen aktiivisimmat jäsenet");
-                        e.description(format!(
-                            "Eilen lähetettin **{}** viestiä, joka on **{:.0} %** keskimääräisestä",
-                            &total_msgs,
-                            total_msgs as f32 / messages_average * 100f32
-                        ));
-                        e.color(serenity::utils::Color::from_rgb(68, 82, 130));
-                        winners
-                            .iter()
-                            .enumerate()
-                            .for_each(|(ranking, (member, msg_count))| {
-                                let msg_percent =
-                                    msg_count.to_owned() as f64 / total_msgs as f64 * 100.;
-                                match member {
-                                    Ok(m) => {
-                                        e.field(
-                                            format!("Sijalla {}.", ranking),
-                                            format!(
-                                                "{}, {} viestiä ({:.1} %)",
-                                                m, msg_count, msg_percent
-                                            ),
-                                            false,
-                                        );
-                                    }
-                                    Err(err) => {
-                                        e.field(
-                                            format!("Sijalla {}.", ranking),
-                                            format!(
-                                                "Entinen jäsen, {} viestiä ({:.1} %)",
-                                                msg_count, msg_percent
-                                            ),
-                                            false,
-                                        );
-                                        error!("{}", err);
-                                    }
-                                };
-                            });
-                        e
-                    })
-                })
+                .send_message(&http, CreateMessage::new().embed(embed))
                 .await
                 .unwrap();
         }

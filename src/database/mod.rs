@@ -1,10 +1,7 @@
-use serenity::prelude::TypeMapKey;
 pub mod giveaway;
 pub mod message_logging;
 pub mod vote;
 pub mod voting;
-
-use std::sync::Arc;
 
 use diesel::{
     mysql::MysqlConnection,
@@ -14,10 +11,6 @@ use diesel::{
 #[derive(Clone)]
 pub struct Database {
     pool: Pool<ConnectionManager<MysqlConnection>>,
-}
-
-impl TypeMapKey for Database {
-    type Value = Arc<Database>;
 }
 
 impl AsRef<Database> for Database {

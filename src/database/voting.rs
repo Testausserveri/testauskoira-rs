@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use serenity::model::channel::Message;
+use poise::serenity_prelude::Message;
 
 use super::Database;
 use crate::models::*;
@@ -14,9 +14,9 @@ impl Database {
     ) -> Result<usize, anyhow::Error> {
         let new_voting = NewCouncilVoting {
             vote_message_id: voting_message_id,
-            suspect_id: message.author.id.0,
-            suspect_message_id: message.id.0,
-            suspect_message_channel_id: message.channel_id.0,
+            suspect_id: message.author.id.get(),
+            suspect_message_id: message.id.get(),
+            suspect_message_channel_id: message.channel_id.get(),
             suspect_message_send_time: message.timestamp.naive_local(),
             suspect_message_content: message.content,
             reporter_id: reporterid,
@@ -67,7 +67,6 @@ impl Database {
 
     pub async fn is_reported(&self, message_id: u64) -> Result<bool, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
-        // FIXME: Very Q&D
         Ok(!CouncilVotings
             .filter(suspect_message_id.eq(message_id))
             .load::<CouncilVoting>(&self.pool.get()?)?
@@ -86,14 +85,17 @@ impl Database {
 
     pub async fn add_edit_event(
         &self,
-        update_event: serenity::model::event::MessageUpdateEvent,
+        update_event: poise::serenity_prelude::MessageUpdateEvent,
         voting_message_id: u64,
     ) -> Result<usize, anyhow::Error> {
         let new_edit = NewSuspectMessageEdit {
             voting_message_id,
-            suspect_message_id: update_event.id.0,
+            suspect_message_id: update_event.id.get(),
             new_content: update_event.content.unwrap_or_default(),
-            edit_time: update_event.edited_timestamp.unwrap().naive_local(),
+            edit_time: update_event
+                .edited_timestamp
+                .unwrap()
+                .naive_local(),
         };
         Ok(
             diesel::insert_into(crate::schema::SuspectMessageEdits::table)
@@ -134,7 +136,6 @@ impl Database {
         };
         {
             use crate::schema::VotingActions::dsl::*;
-            // FIXME: REALLY Q&D
             if !VotingActions
                 .filter(
                     vote_type
@@ -187,7 +188,6 @@ impl Database {
         };
         {
             use crate::schema::VotingActions::dsl::*;
-            // FIXME: REALLY Q&D
             if VotingActions
                 .filter(
                     vote_type

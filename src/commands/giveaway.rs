@@ -1,59 +1,34 @@
-use std::collections::HashMap;
-
-use chrono::{DateTime, Utc};
+use poise::serenity_prelude::{self as serenity, *};
 use rand::seq::SliceRandom;
-use serenity::{
-    builder::{CreateComponents, CreateEmbed},
-    model::{
-        interactions::{
-            message_component::ButtonStyle, InteractionApplicationCommandCallbackDataFlags,
-            InteractionResponseType,
-        },
-        prelude::application_command::*,
-    },
-    prelude::*,
-};
 
-use crate::{
-    database::Database, extensions::*, models::Giveaway, Http, Interaction, Message, ReactionType,
-    User,
-};
+use crate::{database::Database, models::Giveaway, Context, Data, Error};
 
-struct ListOffset;
-
-impl TypeMapKey for ListOffset {
-    type Value = HashMap<u64, i64>;
+#[derive(Debug, poise::ChoiceParameter)]
+pub enum EditField {
+    #[name = "Arpajaisten kesto"]
+    Duration,
+    #[name = "Arpajaisten voittajien lukumäärä"]
+    Winners,
 }
 
-async fn ensure_offset_map(ctx: &Context) {
-    let mut data = ctx.data.write().await;
-    if !data.contains_key::<ListOffset>() {
-        data.insert::<ListOffset>(HashMap::new());
-    }
-}
-
-fn generate_list_components(offset: i64, giveaways: i64) -> CreateComponents {
-    let mut c = CreateComponents(Vec::new());
-
-    c.create_action_row(|r| {
-        r.create_button(|b| {
-            b.style(ButtonStyle::Secondary);
-            b.custom_id("GIVEAWAY_list_back");
-            b.label("Previous page");
-            b.disabled(offset - 10 < 0)
-        });
-        r.create_button(|b| {
-            b.style(ButtonStyle::Secondary);
-            b.custom_id("GIVEAWAY_list_next");
-            b.label("Next page");
-            b.disabled(offset + 10 >= giveaways)
-        })
-    });
-    c
+fn generate_list_components(offset: i64, giveaways: i64) -> Vec<CreateActionRow> {
+    vec![CreateActionRow::Buttons(vec![
+        CreateButton::new("GIVEAWAY_list_back")
+            .style(ButtonStyle::Secondary)
+            .label("Previous page")
+            .disabled(offset - 10 < 0),
+        CreateButton::new("GIVEAWAY_list_next")
+            .style(ButtonStyle::Secondary)
+            .label("Next page")
+            .disabled(offset + 10 >= giveaways),
+    ])]
 }
 
 async fn generate_list_embeds(db: &Database, offset: i64) -> Vec<CreateEmbed> {
-    let giveaways = db.get_n_giveaways_with_offset(10, offset).await.unwrap();
+    let giveaways = db
+        .get_n_giveaways_with_offset(10, offset)
+        .await
+        .unwrap();
     let mut giveaway_winners = Vec::with_capacity(giveaways.len());
 
     for g in giveaways.iter() {
@@ -63,24 +38,24 @@ async fn generate_list_embeds(db: &Database, offset: i64) -> Vec<CreateEmbed> {
 
     let mut embeds: Vec<CreateEmbed> = Vec::new();
     for (g, winners) in giveaways.iter().zip(giveaway_winners.iter()) {
-        let mut e = CreateEmbed(HashMap::new());
         let winner_string = winners
             .iter()
             .map(|x| format!("<@{}>", x.user_id))
             .collect::<Vec<String>>()
             .join(", ");
 
-        e.title(format!("Giveaway #{}", g.id));
-        e.description(format!(
-            "**Prize**: {}\n**Winners**: {}\n**End time**: <t:{}:R>",
-            g.prize,
-            if g.completed {
-                winner_string
-            } else {
-                format!("Max {}", g.max_winners)
-            },
-            g.end_time.timestamp()
-        ));
+        let e = CreateEmbed::new()
+            .title(format!("Giveaway #{}", g.id))
+            .description(format!(
+                "**Prize**: {}\n**Winners**: {}\n**End time**: <t:{}:R>",
+                g.prize,
+                if g.completed {
+                    winner_string
+                } else {
+                    format!("Max {}", g.max_winners)
+                },
+                g.end_time.and_utc().timestamp()
+            ));
         embeds.push(e);
     }
     embeds
@@ -131,13 +106,16 @@ async fn roll_giveaway(
 ) -> Result<(), anyhow::Error> {
     let excluded = excluded.unwrap_or_default();
     let mut message = http
-        .get_message(giveaway.channel_id, giveaway.message_id)
+        .get_message(
+            ChannelId::new(giveaway.channel_id),
+            MessageId::new(giveaway.message_id),
+        )
         .await?;
     let candidates = get_reacters(http, &message, reaction.clone())
         .await
         .map(|v| {
             v.into_iter()
-                .filter(|x| !x.bot && !excluded.contains(&x.id.0))
+                .filter(|x| !x.bot && !excluded.contains(&x.id.get()))
                 .collect::<Vec<User>>()
         })?;
     let winners = roll_winners(&candidates, giveaway.max_winners).await;
@@ -146,20 +124,24 @@ async fn roll_giveaway(
     } else {
         winners
             .iter()
-            .map(|x| format!("<@{}>", x.id.0))
+            .map(|x| format!("<@{}>", x.id.get()))
             .collect::<Vec<String>>()
             .join(", ")
     };
 
     message
-        .edit(&http, |e| {
-            e.embed(|e| {
-                e.title(&giveaway.prize);
-                e.description(format!("Winners: {}", winners_string));
-                e.timestamp(DateTime::<Utc>::from_utc(giveaway.end_time, Utc));
-                e.footer(|f| f.text(format!("ID: {} | ended at", giveaway.id).as_str()))
-            })
-        })
+        .edit(
+            &http,
+            EditMessage::new().embed(
+                CreateEmbed::new()
+                    .title(&giveaway.prize)
+                    .description(format!("Winners: {}", winners_string))
+                    .timestamp(Timestamp::from(giveaway.end_time.and_utc()))
+                    .footer(CreateEmbedFooter::new(
+                        format!("ID: {} | ended at", giveaway.id),
+                    )),
+            ),
+        )
         .await?;
     if winners.is_empty() {
         message
@@ -178,8 +160,11 @@ async fn roll_giveaway(
             )
             .await?;
     }
-    db.add_giveaway_winners(giveaway.id, &winners.iter().map(|u| u.id.0).collect())
-        .await?;
+    db.add_giveaway_winners(
+        giveaway.id,
+        &winners.iter().map(|u| u.id.get()).collect(),
+    )
+    .await?;
     info!("Successfully rolled winners for giveaway {}", giveaway.id);
     Ok(())
 }
@@ -191,73 +176,103 @@ pub async fn end_giveaway(
     reaction: ReactionType,
 ) -> Result<(), anyhow::Error> {
     let giveaway_id = giveaway.id;
-    roll_giveaway(http, db, giveaway, reaction.clone(), None).await?;
+    roll_giveaway(http, db, giveaway, reaction, None).await?;
     db.end_giveaway(giveaway_id).await?;
     info!("Successfully ended giveaway {}", giveaway_id);
     Ok(())
 }
 
-pub async fn handle_component_interaction(ctx: &Context, interaction: Interaction) {
-    let db = ctx.get_db().await;
-    ensure_offset_map(ctx).await;
-    let mut data = ctx.data.write().await;
-    let offsets = data.get_mut::<ListOffset>().unwrap();
+pub async fn handle_component_interaction(
+    ctx: &serenity::Context,
+    data: &Data,
+    component: ComponentInteraction,
+) {
+    let mut offsets = data.list_offsets.lock().await;
 
-    if let Interaction::MessageComponent(component) = interaction {
-        match component.data.custom_id.as_str() {
-            "GIVEAWAY_list_back" => {
-                let mut offset = offsets.get(&component.user.id.0).unwrap_or(&0).to_owned();
-                offset -= 10;
-                if offset < 0 {
-                    offset = 0;
-                }
-                let giveaways = db.get_giveaways().await.unwrap().len() as i64;
-                let embeds = generate_list_embeds(&db, offset).await;
-                let components = generate_list_components(offset, giveaways);
-                debug!(
-                    "Showing previous 10 giveaways for user {}",
-                    component.user.id.0
-                );
-                component
-                    .create_interaction_response(&ctx.http, |r| {
-                        r.kind(InteractionResponseType::UpdateMessage);
-                        r.interaction_response_data(|d| {
-                            d.set_components(components);
-                            d.set_embeds(embeds)
-                        })
-                    })
-                    .await
-                    .unwrap();
-                offsets.insert(component.user.id.0, offset);
+    match component.data.custom_id.as_str() {
+        "GIVEAWAY_list_back" => {
+            let mut offset = offsets
+                .get(&component.user.id.get())
+                .unwrap_or(&0)
+                .to_owned();
+            offset -= 10;
+            if offset < 0 {
+                offset = 0;
             }
-            "GIVEAWAY_list_next" => {
-                let offset = offsets.get(&component.user.id.0).unwrap_or(&0).to_owned() + 10;
-                let embeds = generate_list_embeds(&db, offset).await;
-                let components = generate_list_components(offset, embeds.len() as i64);
-                debug!(
-                    "Showing next {} giveaways for user {}",
-                    embeds.len(),
-                    component.user.id.0
-                );
-                component
-                    .create_interaction_response(&ctx.http, |r| {
-                        r.kind(InteractionResponseType::UpdateMessage);
-                        r.interaction_response_data(|d| {
-                            d.set_components(components);
-                            d.set_embeds(embeds)
-                        })
-                    })
-                    .await
-                    .unwrap();
-                offsets.insert(component.user.id.0, offset);
-            }
-            _ => debug!("Unknown interaction: {}", component.data.custom_id),
+            let giveaways = data.db.get_giveaways().await.unwrap().len() as i64;
+            let embeds = generate_list_embeds(&data.db, offset).await;
+            let components = generate_list_components(offset, giveaways);
+            debug!(
+                "Showing previous 10 giveaways for user {}",
+                component.user.id.get()
+            );
+            component
+                .create_response(
+                    &ctx.http,
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new()
+                            .embeds(embeds)
+                            .components(components),
+                    ),
+                )
+                .await
+                .unwrap();
+            offsets.insert(component.user.id.get(), offset);
         }
+        "GIVEAWAY_list_next" => {
+            let offset = offsets
+                .get(&component.user.id.get())
+                .unwrap_or(&0)
+                .to_owned()
+                + 10;
+            let embeds = generate_list_embeds(&data.db, offset).await;
+            let components = generate_list_components(offset, embeds.len() as i64);
+            debug!(
+                "Showing next {} giveaways for user {}",
+                embeds.len(),
+                component.user.id.get()
+            );
+            component
+                .create_response(
+                    &ctx.http,
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new()
+                            .embeds(embeds)
+                            .components(components),
+                    ),
+                )
+                .await
+                .unwrap();
+            offsets.insert(component.user.id.get(), offset);
+        }
+        _ => debug!("Unknown interaction: {}", component.data.custom_id),
     }
 }
 
-pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandInteraction) {
-    let db = ctx.get_db().await;
+/// Luo arvonta tai hallitse käynnissä olevia arpajaisia
+#[poise::command(
+    slash_command,
+    subcommands("start", "list", "reroll", "edit", "end", "delete"),
+    default_member_permissions = "ADMINISTRATOR"
+)]
+pub async fn giveaway(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Luo ja aloita arvonta
+#[poise::command(slash_command)]
+pub async fn start(
+    ctx: Context<'_>,
+    #[description = "Arpajaisilmoituksen kanava"]
+    #[channel_types("Text", "News")]
+    channel: GuildChannel,
+    #[description = "Arpajaisten kesto (sekunneissa)"] duration: Option<i64>,
+    #[description = "Arpajaisten voittajien lukumäärä"] winners: Option<i64>,
+    #[description = "Arpajaisten palkinto"] prize: Option<String>,
+    #[description = "Rooli joka mainitaan arpajaisilmoituksessa"] mention: Option<Role>,
+) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
 
     let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
         .unwrap_or("🎉".to_string())
@@ -277,409 +292,405 @@ pub async fn handle_interaction(ctx: &Context, interaction: ApplicationCommandIn
     let default_prize: String =
         std::env::var("GIVEAWAY_DEFAULT_PRIZE").unwrap_or("Nothing".to_string());
 
-    ensure_offset_map(ctx).await;
-    let mut data = ctx.data.write().await;
-    let offset_map = data.get_mut::<ListOffset>().unwrap();
+    let duration = duration.unwrap_or(default_duration);
+    let winners = winners.unwrap_or(default_winners);
+    let prize = prize.unwrap_or(default_prize);
 
-    let option = interaction
-        .data
-        .options
-        .first()
-        .expect("Giveaway subcommand missing");
-    let sub_options = option.options.clone();
+    if winners < 1 || duration < 1 {
+        ctx.send(
+            poise::CreateReply::default()
+                .ephemeral(true)
+                .content("Duration and winners must be positive integers or left empty."),
+        )
+        .await?;
+        return Ok(());
+    }
 
-    match option.name.as_str() {
-        "start" => {
-            let channel = sub_options
-                .by_name("channel")
-                .expect("Missing channel option")
-                .to_channel()
-                .expect("Invalid channel option");
-            let duration = sub_options
-                .by_name("duration")
-                .map_or(default_duration, |x| x.to_i64().unwrap_or(default_duration));
-            let winners = sub_options
-                .by_name("winners")
-                .map_or(default_winners, |x| x.to_i64().unwrap_or(default_winners));
-            let prize = sub_options
-                .by_name("prize")
-                .map_or(default_prize.clone(), |x| {
-                    x.to_string().unwrap_or(default_prize)
-                });
-            let mention = sub_options
-                .by_name("mention")
-                .map(|x| x.to_role())
-                .unwrap_or(None);
+    let now = chrono::Utc::now();
+    let end = now + chrono::Duration::seconds(duration);
+    let mut msg_builder = CreateMessage::new();
+    if let Some(m) = mention {
+        msg_builder = msg_builder.content(format!("<@&{}>", m.id.get()));
+    }
+    msg_builder = msg_builder.embed(
+        CreateEmbed::new()
+            .title(&prize)
+            .description(format!("{} winners", winners))
+            .timestamp(Timestamp::from(end))
+            .footer(CreateEmbedFooter::new("ID: ? | ends at")),
+    );
 
-            if winners < 1 || duration < 1 {
-                interaction
-                    .create_interaction_response(&ctx.http, |r| {
-                        r.interaction_response_data(|d| {
-                            d.content(
-                                "Duration and winners must be positive integers or left empty.",
-                            );
-                            d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                        })
-                    })
-                    .await
-                    .unwrap();
-            } else {
-                let now = chrono::Utc::now();
-                let end = now + chrono::Duration::seconds(duration);
-                let mut message = channel
-                    .id
-                    .send_message(&ctx.http, |c| {
-                        if let Some(m) = mention {
-                            c.content(format!("<@&{}>", m.id.0));
-                        }
-                        c.embed(|e| {
-                            e.title(&prize);
-                            e.description(format!("{} winners", winners));
-                            e.timestamp(end);
-                            e.footer(|f| f.text("ID: ? | ends at"))
-                        })
-                    })
-                    .await
-                    .unwrap();
+    let mut message = channel
+        .id
+        .send_message(&serenity_ctx.http, msg_builder)
+        .await
+        .unwrap();
 
-                message
-                    .react(&ctx.http, ReactionType::from(giveaway_emoji))
-                    .await
-                    .unwrap();
+    message
+        .react(&serenity_ctx.http, ReactionType::from(giveaway_emoji))
+        .await
+        .unwrap();
 
-                match db
-                    .start_giveaway(&message, end.naive_utc(), winners, &prize)
-                    .await
-                {
-                    Ok(id) => {
-                        message
-                            .edit(&ctx.http, |e| {
-                                e.embed(|e| {
-                                    e.title(prize);
-                                    e.description(format!("{} winners", winners));
-                                    e.timestamp(end);
-                                    e.footer(|f| f.text(format!("ID: {} | ends at", id)))
-                                })
-                            })
-                            .await
-                            .unwrap();
-                        interaction
-                            .create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content(format!("Giveaway started in <#{}>", channel.id.0));
-                                    d.flags(
-                                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL,
-                                    )
-                                })
-                            })
-                            .await
-                            .unwrap();
-                        info!(
-                            "Giveaway started by user {} in channel {}, id {}, duration {} seconds",
-                            interaction.user.id.0, channel.id.0, id, duration
-                        );
-                    }
-                    Err(e) => {
-                        error!("Failed to start giveaway: {}", e);
-                        message.delete(&ctx.http).await.unwrap();
-                        interaction
-                            .create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("Giveaway failed to be started");
-                                    d.flags(
-                                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL,
-                                    )
-                                })
-                            })
-                            .await
-                            .unwrap();
-                    }
-                }
-            }
-        }
-        "list" => {
-            let giveaways = db.get_giveaways().await.unwrap();
-            let embeds = generate_list_embeds(&db, 0).await;
-            offset_map.insert(interaction.user.id.0, 0);
-            interaction
-                .create_interaction_response(&ctx.http, |r| {
-                    r.interaction_response_data(|d| {
-                        d.set_embeds(embeds);
-                        d.set_components(generate_list_components(0, giveaways.len() as i64));
-                        d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                    })
-                })
+    match data
+        .db
+        .start_giveaway(&message, end.naive_utc(), winners, &prize)
+        .await
+    {
+        Ok(id) => {
+            message
+                .edit(
+                    &serenity_ctx.http,
+                    EditMessage::new().embed(
+                        CreateEmbed::new()
+                            .title(&prize)
+                            .description(format!("{} winners", winners))
+                            .timestamp(Timestamp::from(end))
+                            .footer(CreateEmbedFooter::new(format!("ID: {} | ends at", id))),
+                    ),
+                )
                 .await
                 .unwrap();
-            info!("Showing list for user {}", interaction.user.id.0)
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content(format!(
+                        "Giveaway started in <#{}>",
+                        channel.id.get()
+                    )),
+            )
+            .await?;
+            info!(
+                "Giveaway started by user {} in channel {}, id {}, duration {} seconds",
+                ctx.author().id.get(),
+                channel.id.get(),
+                id,
+                duration
+            );
         }
-        "reroll" => {
-            let giveaway_id = sub_options
-                .by_name("giveaway_id")
-                .expect("Missing giveaway id")
-                .to_i64()
-                .expect("Invalid giveaway id");
-            let allow_past = sub_options
-                .by_name("allow_past")
-                .map_or(false, |x| x.to_bool().unwrap_or(false));
-            let giveaway = db.get_giveaway(giveaway_id).await.unwrap();
+        Err(e) => {
+            error!("Failed to start giveaway: {}", e);
+            message.delete(&serenity_ctx.http).await.unwrap();
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content("Giveaway failed to be started"),
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
 
-            let excluded = if !allow_past {
-                Some(
-                    db.get_giveaway_winners(giveaway.id)
-                        .await
-                        .map(|x| x.into_iter().map(|x| x.user_id).collect())
-                        .unwrap(),
+/// Luetteloi arpajaiset
+#[poise::command(slash_command)]
+pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+    let data = ctx.data();
+    let giveaways = data.db.get_giveaways().await.unwrap();
+    let embeds = generate_list_embeds(&data.db, 0).await;
+
+    data.list_offsets
+        .lock()
+        .await
+        .insert(ctx.author().id.get(), 0);
+
+    let mut reply = poise::CreateReply::default()
+        .ephemeral(true)
+        .components(generate_list_components(0, giveaways.len() as i64));
+    for embed in embeds {
+        reply = reply.embed(embed);
+    }
+    ctx.send(reply).await?;
+    info!("Showing list for user {}", ctx.author().id.get());
+    Ok(())
+}
+
+/// Arvo uudelleen arpajaisten voittaja(t)
+#[poise::command(slash_command)]
+pub async fn reroll(
+    ctx: Context<'_>,
+    #[description = "Arvonnan tunniste"] giveaway_id: i64,
+    #[description = "Salli entisten voittajien uudelleenvalitseminen, oletus = false"]
+    allow_past: Option<bool>,
+) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
+    let allow_past = allow_past.unwrap_or(false);
+
+    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
+        .unwrap_or("🎉".to_string())
+        .parse()
+        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+
+    let giveaway = data.db.get_giveaway(giveaway_id).await.unwrap();
+
+    let excluded = if !allow_past {
+        Some(
+            data.db
+                .get_giveaway_winners(giveaway.id)
+                .await
+                .map(|x| x.into_iter().map(|x| x.user_id).collect())
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+
+    if !allow_past {
+        data.db
+            .set_giveaway_winners_rerolled(giveaway_id, excluded.as_ref().unwrap())
+            .await
+            .unwrap();
+    }
+
+    roll_giveaway(
+        &serenity_ctx.http,
+        &data.db,
+        &giveaway,
+        ReactionType::from(giveaway_emoji),
+        excluded,
+    )
+    .await
+    .unwrap();
+
+    info!(
+        "{} rerolled giveaway {}",
+        ctx.author().id.get(),
+        giveaway_id
+    );
+
+    ctx.send(
+        poise::CreateReply::default()
+            .ephemeral(true)
+            .content("Rerolled giveaway"),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Muokkaa arpajaisia
+#[poise::command(slash_command)]
+pub async fn edit(
+    ctx: Context<'_>,
+    #[description = "Arvonnan tunniste"] giveaway_id: i64,
+    #[description = "Muokattava ominaisuus"] field: EditField,
+    #[description = "Uusi arvo"] new_value: i64,
+) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
+
+    let giveaway = data.db.get_giveaway(giveaway_id).await.unwrap();
+    let mut message = serenity_ctx
+        .http
+        .get_message(
+            ChannelId::new(giveaway.channel_id),
+            MessageId::new(giveaway.message_id),
+        )
+        .await
+        .unwrap();
+
+    match field {
+        EditField::Winners => {
+            data.db
+                .edit_giveaway_max_winners(giveaway_id, new_value)
+                .await
+                .unwrap();
+            message
+                .edit(
+                    &serenity_ctx.http,
+                    EditMessage::new().embed(
+                        CreateEmbed::new()
+                            .title(&giveaway.prize)
+                            .description(format!("{} winners", new_value))
+                            .timestamp(Timestamp::from(giveaway.end_time.and_utc()))
+                            .footer(CreateEmbedFooter::new(
+                                format!("ID: {} | ends at", giveaway_id),
+                            )),
+                    ),
                 )
-            } else {
-                None
-            };
+                .await
+                .unwrap();
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content(format!("Max winners changed to {}", new_value)),
+            )
+            .await?;
+            info!(
+                "User {} changed giveaway {}'s max winners to {}",
+                ctx.author().id.get(),
+                giveaway_id,
+                new_value
+            );
+        }
+        EditField::Duration => {
+            let giveaway = data.db.get_giveaway(giveaway_id).await.unwrap();
+            let start_time = giveaway.start_time;
+            let new_time = start_time + chrono::Duration::seconds(new_value);
 
-            if !allow_past {
-                db.set_giveaway_winners_rerolled(giveaway_id, excluded.as_ref().unwrap())
-                    .await
-                    .unwrap();
+            data.db
+                .edit_giveaway_duration(giveaway_id, new_time)
+                .await
+                .unwrap();
+            message
+                .edit(
+                    &serenity_ctx.http,
+                    EditMessage::new().embed(
+                        CreateEmbed::new()
+                            .title(&giveaway.prize)
+                            .description(format!("{} winners", giveaway.max_winners))
+                            .timestamp(Timestamp::from(new_time.and_utc()))
+                            .footer(CreateEmbedFooter::new(
+                                format!("ID: {} | ends at", giveaway.id),
+                            )),
+                    ),
+                )
+                .await
+                .unwrap();
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content(format!("Duration changed to {} seconds", new_value)),
+            )
+            .await?;
+            info!(
+                "User {} changed giveaway {}'s duration to {} seconds",
+                ctx.author().id.get(),
+                giveaway_id,
+                new_value
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Lopeta arpajaiset
+#[poise::command(slash_command)]
+pub async fn end(
+    ctx: Context<'_>,
+    #[description = "Arvonnan tunniste"] giveaway_id: i64,
+) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
+
+    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
+        .unwrap_or("🎉".to_string())
+        .parse()
+        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+
+    match data.db.get_giveaway(giveaway_id).await {
+        Ok(giveaway) => {
+            if giveaway.completed {
+                ctx.send(
+                    poise::CreateReply::default()
+                        .ephemeral(true)
+                        .content("Giveaway has already ended"),
+                )
+                .await?;
+                return Ok(());
             }
 
-            roll_giveaway(
-                &ctx.http,
-                &db,
+            end_giveaway(
+                &serenity_ctx.http,
+                &data.db,
                 &giveaway,
                 ReactionType::from(giveaway_emoji),
-                excluded,
             )
             .await
             .unwrap();
 
             info!(
-                "{} rerolled giveaway {}",
-                interaction.user.id.0, giveaway_id
+                "User {} manually ended giveaway {}",
+                ctx.author().id.get(),
+                giveaway_id
             );
 
-            interaction
-                .create_interaction_response(&ctx.http, |r| {
-                    r.interaction_response_data(|d| {
-                        d.content("Rerolled giveaway");
-                        d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                    })
-                })
-                .await
-                .unwrap();
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content(format!("Giveaway ended in <#{}>", giveaway.channel_id)),
+            )
+            .await?;
         }
-        "edit" => {
-            let giveaway_id = sub_options
-                .by_name("giveaway_id")
-                .expect("Missing giveaway id option")
-                .to_i64()
-                .expect("Invalid giveaway id option");
-            let field = sub_options
-                .by_name("field")
-                .expect("Missing field option")
-                .to_string()
-                .expect("Invalid field option");
-            let new_value = sub_options
-                .by_name("new_value")
-                .expect("Missing new value option")
-                .to_i64()
-                .expect("Invalid new value option");
-
-            let giveaway = db.get_giveaway(giveaway_id).await.unwrap();
-            let mut message = ctx
-                .http
-                .get_message(giveaway.channel_id, giveaway.message_id)
-                .await
-                .unwrap();
-
-            match field.as_str() {
-                "winners" => {
-                    db.edit_giveaway_max_winners(giveaway_id, new_value)
-                        .await
-                        .unwrap();
-                    message
-                        .edit(&ctx.http, |e| {
-                            e.embed(|e| {
-                                e.title(giveaway.prize);
-                                e.description(format!("{} winners", new_value));
-                                e.timestamp(DateTime::<Utc>::from_utc(giveaway.end_time, Utc));
-                                e.footer(|f| f.text(format!("ID: {} | ends at", giveaway_id)))
-                            })
-                        })
-                        .await
-                        .unwrap();
-                    interaction
-                        .create_interaction_response(&ctx.http, |r| {
-                            r.interaction_response_data(|d| {
-                                d.content(format!("Max winners changed to {}", new_value));
-                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                            })
-                        })
-                        .await
-                        .unwrap();
-                    info!(
-                        "User {} changed giveaway {}'s max winners to {}",
-                        interaction.user.id.0, giveaway_id, new_value
-                    );
-                }
-                "duration" => {
-                    let giveaway = db.get_giveaway(giveaway_id).await.unwrap();
-                    let start_time = giveaway.start_time;
-                    let new_time = start_time + chrono::Duration::seconds(new_value);
-
-                    db.edit_giveaway_duration(giveaway_id, new_time)
-                        .await
-                        .unwrap();
-                    message
-                        .edit(&ctx.http, |e| {
-                            e.embed(|e| {
-                                e.title(&giveaway.prize);
-                                e.description(format!("{} winners", giveaway.max_winners));
-                                e.timestamp(DateTime::<Utc>::from_utc(new_time, Utc));
-                                e.footer(|f| f.text(format!("ID: {} | ends at", giveaway.id)))
-                            })
-                        })
-                        .await
-                        .unwrap();
-                    interaction
-                        .create_interaction_response(&ctx.http, |r| {
-                            r.interaction_response_data(|d| {
-                                d.content(format!("Duration changed to {} seconds", new_value));
-                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                            })
-                        })
-                        .await
-                        .unwrap();
-                    info!(
-                        "User {} changed giveaway {}'s duration to {} seconds",
-                        interaction.user.id.0, giveaway_id, new_value
-                    );
-                }
-                _ => panic!("Attempt to edit unknown field {}", field),
-            }
-        }
-        "end" => {
-            let giveaway_id = sub_options
-                .by_name("giveaway_id")
-                .expect("Missing giveaway id option")
-                .to_i64()
-                .expect("Invalid giveaway id option");
-            match db.get_giveaway(giveaway_id).await {
-                Ok(giveaway) => {
-                    if giveaway.completed {
-                        interaction
-                            .create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("Giveaway has already ended");
-                                    d.flags(
-                                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL,
-                                    )
-                                })
-                            })
-                            .await
-                            .unwrap();
-                        return;
-                    }
-
-                    end_giveaway(
-                        &ctx.http,
-                        &db,
-                        &giveaway,
-                        ReactionType::from(giveaway_emoji),
+        Err(e) => {
+            match e.downcast_ref::<diesel::result::Error>() {
+                Some(diesel::result::Error::NotFound) => {
+                    ctx.send(
+                        poise::CreateReply::default()
+                            .ephemeral(true)
+                            .content("Giveaway not found"),
                     )
-                    .await
-                    .unwrap();
-
-                    info!(
-                        "User {} manually ended giveaway {}",
-                        interaction.user.id.0, giveaway_id
-                    );
-
-                    interaction
-                        .create_interaction_response(&ctx.http, |r| {
-                            r.interaction_response_data(|d| {
-                                d.content(format!("Giveaway ended in <#{}>", giveaway.channel_id));
-                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                            })
-                        })
-                        .await
-                        .unwrap();
+                    .await?;
                 }
-                Err(e) => {
-                    match e.downcast_ref::<diesel::result::Error>() {
-                        Some(diesel::result::Error::NotFound) => {
-                            interaction.create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("Giveaway not found");
-                                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                })
-                            }).await.unwrap();
-                        }
-                        _ => {
-                            error!("Error while ending giveaway {}: {}", giveaway_id, e);
-                            interaction.create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("An error occurred while ending the giveaway");
-                                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                })
-                            }).await.unwrap();
-                        }
-                    }
+                _ => {
+                    error!("Error while ending giveaway {}: {}", giveaway_id, e);
+                    ctx.send(
+                        poise::CreateReply::default()
+                            .ephemeral(true)
+                            .content("An error occurred while ending the giveaway"),
+                    )
+                    .await?;
                 }
             }
         }
-        "delete" => {
-            let giveaway_id = sub_options
-                .by_name("giveaway_id")
-                .expect("Missing giveaway id option")
-                .to_i64()
-                .expect("Invalid giveaway id option");
-
-            match db.delete_giveaway(giveaway_id).await {
-                Ok(giveaway) => {
-                    let message = ctx
-                        .http
-                        .get_message(giveaway.channel_id, giveaway.message_id)
-                        .await
-                        .unwrap();
-                    message.delete(&ctx.http).await.unwrap();
-
-                    info!(
-                        "User {} deleted giveaway {}",
-                        interaction.user.id.0, giveaway_id
-                    );
-
-                    interaction
-                        .create_interaction_response(&ctx.http, |r| {
-                            r.interaction_response_data(|d| {
-                                d.content("Giveaway deleted");
-                                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                            })
-                        })
-                        .await
-                        .unwrap();
-                }
-                Err(e) => {
-                    match e.downcast_ref::<diesel::result::Error>() {
-                        Some(diesel::result::Error::NotFound) => {
-                            interaction.create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("Giveaway not found");
-                                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                })
-                            }).await.unwrap();
-                        }
-                        _ => {
-                            error!("Error while deleting giveaway {}: {}", giveaway_id, e);
-                            interaction.create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| {
-                                    d.content("An error occurred while deleting the giveaway");
-                                    d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
-                                })
-                            }).await.unwrap();
-                        }
-                    }
-                }
-            }
-        }
-        _ => panic!("Unknown command {}", interaction.data.name),
     }
+    Ok(())
+}
+
+/// Poista arpajaiset
+#[poise::command(slash_command)]
+pub async fn delete(
+    ctx: Context<'_>,
+    #[description = "Arvonnan tunniste"] giveaway_id: i64,
+) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
+
+    match data.db.delete_giveaway(giveaway_id).await {
+        Ok(giveaway) => {
+            let message = serenity_ctx
+                .http
+                .get_message(
+                    ChannelId::new(giveaway.channel_id),
+                    MessageId::new(giveaway.message_id),
+                )
+                .await
+                .unwrap();
+            message.delete(&serenity_ctx.http).await.unwrap();
+
+            info!(
+                "User {} deleted giveaway {}",
+                ctx.author().id.get(),
+                giveaway_id
+            );
+
+            ctx.send(
+                poise::CreateReply::default()
+                    .ephemeral(true)
+                    .content("Giveaway deleted"),
+            )
+            .await?;
+        }
+        Err(e) => {
+            match e.downcast_ref::<diesel::result::Error>() {
+                Some(diesel::result::Error::NotFound) => {
+                    ctx.send(
+                        poise::CreateReply::default()
+                            .ephemeral(true)
+                            .content("Giveaway not found"),
+                    )
+                    .await?;
+                }
+                _ => {
+                    error!("Error while deleting giveaway {}: {}", giveaway_id, e);
+                    ctx.send(
+                        poise::CreateReply::default()
+                            .ephemeral(true)
+                            .content("An error occurred while deleting the giveaway"),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
