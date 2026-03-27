@@ -44,6 +44,12 @@
               pkgs.libmysqlclient
             ];
 
+            nativeBuildInputs = [
+              pkgs.pkg-config
+            ];
+
+            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.libmysqlclient}/lib/mariadb";
+
             src = ./.;
           };
 

@@ -187,66 +187,46 @@ pub async fn handle_component_interaction(
     data: &Data,
     component: ComponentInteraction,
 ) {
-    let mut offsets = data.list_offsets.lock().await;
+    let current_offset = {
+        let offsets = data.list_offsets.lock().await;
+        offsets.get(&component.user.id.get()).copied().unwrap_or(0)
+    };
 
-    match component.data.custom_id.as_str() {
-        "GIVEAWAY_list_back" => {
-            let mut offset = offsets
-                .get(&component.user.id.get())
-                .unwrap_or(&0)
-                .to_owned();
-            offset -= 10;
-            if offset < 0 {
-                offset = 0;
-            }
-            let giveaways = data.db.get_giveaways().await.unwrap().len() as i64;
-            let embeds = generate_list_embeds(&data.db, offset).await;
-            let components = generate_list_components(offset, giveaways);
-            debug!(
-                "Showing previous 10 giveaways for user {}",
-                component.user.id.get()
-            );
-            component
-                .create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::UpdateMessage(
-                        CreateInteractionResponseMessage::new()
-                            .embeds(embeds)
-                            .components(components),
-                    ),
-                )
-                .await
-                .unwrap();
-            offsets.insert(component.user.id.get(), offset);
+    let new_offset = match component.data.custom_id.as_str() {
+        "GIVEAWAY_list_back" => (current_offset - 10).max(0),
+        "GIVEAWAY_list_next" => current_offset + 10,
+        _ => {
+            debug!("Unknown interaction: {}", component.data.custom_id);
+            return;
         }
-        "GIVEAWAY_list_next" => {
-            let offset = offsets
-                .get(&component.user.id.get())
-                .unwrap_or(&0)
-                .to_owned()
-                + 10;
-            let embeds = generate_list_embeds(&data.db, offset).await;
-            let components = generate_list_components(offset, embeds.len() as i64);
-            debug!(
-                "Showing next {} giveaways for user {}",
-                embeds.len(),
-                component.user.id.get()
-            );
-            component
-                .create_response(
-                    &ctx.http,
-                    CreateInteractionResponse::UpdateMessage(
-                        CreateInteractionResponseMessage::new()
-                            .embeds(embeds)
-                            .components(components),
-                    ),
-                )
-                .await
-                .unwrap();
-            offsets.insert(component.user.id.get(), offset);
-        }
-        _ => debug!("Unknown interaction: {}", component.data.custom_id),
-    }
+    };
+
+    let giveaways = data.db.get_giveaways().await.unwrap().len() as i64;
+    let embeds = generate_list_embeds(&data.db, new_offset).await;
+    let components = generate_list_components(new_offset, giveaways);
+
+    debug!(
+        "Showing giveaways at offset {} for user {}",
+        new_offset,
+        component.user.id.get()
+    );
+
+    component
+        .create_response(
+            &ctx.http,
+            CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::new()
+                    .embeds(embeds)
+                    .components(components),
+            ),
+        )
+        .await
+        .unwrap();
+
+    data.list_offsets
+        .lock()
+        .await
+        .insert(component.user.id.get(), new_offset);
 }
 
 /// Luo arvonta tai hallitse käynnissä olevia arpajaisia
@@ -523,7 +503,6 @@ pub async fn edit(
             );
         }
         EditField::Duration => {
-            let giveaway = data.db.get_giveaway(giveaway_id).await.unwrap();
             let start_time = giveaway.start_time;
             let new_time = start_time + chrono::Duration::seconds(new_value);
 

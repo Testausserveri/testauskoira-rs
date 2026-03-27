@@ -147,14 +147,14 @@ async fn event_handler(
 }
 
 async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Message) {
-    // Check and reload blacklist regexes if file changed
+    // Check and reload blacklist regexes if file changed, then check message
     {
         let last_edited = std::fs::metadata("blacklist.txt")
             .and_then(|m| m.modified())
             .ok();
 
+        let mut regexes = data.blacklist.lock().await;
         if let Some(last_edited) = last_edited {
-            let mut regexes = data.blacklist.lock().await;
             if last_edited != regexes.last_edited {
                 let words = match std::fs::read_to_string("blacklist.txt") {
                     Ok(s) => s,
@@ -185,11 +185,7 @@ async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Me
                 };
             }
         }
-    }
 
-    // Check blacklist
-    {
-        let regexes = data.blacklist.lock().await;
         for re in &regexes.regexvec {
             if re.is_match(&msg.content) {
                 msg.delete(&ctx.http).await.ok();
@@ -201,16 +197,20 @@ async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Me
     // Increment message count
     if let Some(gid) = msg.guild_id {
         if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() && !msg.author.bot {
-            if let Ok(serenity::Channel::Guild(c)) = msg.channel(&ctx.http).await {
-                match c.kind {
-                    serenity::ChannelType::PrivateThread => {}
-                    _ => {
-                        data.db
-                            .increment_message_count(&msg.author.id.get())
-                            .await
-                            .ok();
-                    }
-                }
+            let is_private_thread = ctx
+                .cache
+                .guild(gid)
+                .and_then(|g| {
+                    g.channels
+                        .get(&msg.channel_id)
+                        .map(|c| c.kind == serenity::ChannelType::PrivateThread)
+                })
+                .unwrap_or(false);
+            if !is_private_thread {
+                data.db
+                    .increment_message_count(&msg.author.id.get())
+                    .await
+                    .ok();
             }
         }
     }
@@ -244,7 +244,7 @@ async fn main() {
         if w.is_empty() {
             continue;
         }
-        if let Ok(re) = regex::Regex::new(w) {
+        if let Ok(re) = regex::RegexBuilder::new(w).case_insensitive(true).build() {
             regexvec.push(re);
         } else {
             info!("Skipping invalid regex in `blacklist.txt`: {}", w);

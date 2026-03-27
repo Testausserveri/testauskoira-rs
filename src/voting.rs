@@ -1,5 +1,7 @@
 // FIXME: un-unwrap();
 
+use std::collections::HashSet;
+
 use poise::serenity_prelude::{self as serenity, *};
 
 use crate::{
@@ -8,21 +10,22 @@ use crate::{
 };
 
 pub struct PendingEdits {
-    edits: Vec<u64>,
+    edits: HashSet<u64>,
 }
 
 impl PendingEdits {
     pub fn new() -> PendingEdits {
-        let edits = Vec::new();
-        Self { edits }
+        Self {
+            edits: HashSet::new(),
+        }
     }
 
     pub fn add(&mut self, message_id: u64) {
-        self.edits.push(message_id);
+        self.edits.insert(message_id);
     }
 
     pub fn remove(&mut self, message_id: u64) {
-        self.edits.retain(|x| *x != message_id);
+        self.edits.remove(&message_id);
     }
 
     pub fn contains(&self, message_id: u64) -> bool {
@@ -34,7 +37,7 @@ async fn is_reported(data: &Data, message_id: u64) -> bool {
     data.db.is_reported(message_id).await.unwrap_or(false)
 }
 
-fn filter_votes(id: i32, actions: Vec<VotingAction>) -> String {
+fn filter_votes(id: i32, actions: &[VotingAction]) -> String {
     let mut actions = actions
         .iter()
         .filter(|x| x.vote_type == id)
@@ -57,9 +60,9 @@ fn generate_moderation_message(
         "https://discord.com/channels/{}/{}/{}",
         guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
     );
-    let delete_voters = filter_votes(0, votes.clone());
-    let silence_voters = filter_votes(1, votes.clone());
-    let block_reporter_voters = filter_votes(2, votes);
+    let delete_voters = filter_votes(0, &votes);
+    let silence_voters = filter_votes(1, &votes);
+    let block_reporter_voters = filter_votes(2, &votes);
 
     let main_embed = CreateEmbed::new()
         .colour(Colour::RED)
@@ -567,18 +570,18 @@ async fn handle_useless_button(
         .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
         .await
         .unwrap();
-    let pending_edits = data.pending_edits.clone();
-    if !pending_edits
-        .lock()
-        .await
-        .contains(component.message.id.get())
-    {
-        pending_edits
-            .lock()
-            .await
-            .add(component.message.id.get());
+    let should_update = {
+        let mut pending = data.pending_edits.lock().await;
+        if !pending.contains(component.message.id.get()) {
+            pending.add(component.message.id.get());
+            true
+        } else {
+            false
+        }
+    };
+    if should_update {
         update_voting_message(ctx, data, component.message.id.get()).await;
-        pending_edits
+        data.pending_edits
             .lock()
             .await
             .remove(component.message.id.get());
