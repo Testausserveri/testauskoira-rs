@@ -68,7 +68,10 @@
 
           docker = pkgs.dockerTools.buildLayeredImage {
             name = "ghcr.io/testausserveri/testauskoira-rs";
-            config.Cmd = [ "${default}/bin/testauskoira-rs" ];
+            config = {
+              Cmd = [ "${default}/bin/testauskoira-rs" ];
+              WorkingDir = "/app";
+            };
           };
         }
       );
