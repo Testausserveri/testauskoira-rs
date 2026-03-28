@@ -23,7 +23,7 @@ impl Database {
         };
         diesel::insert_into(crate::schema::VoteEvents::table)
             .values(&event)
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         let vote_id = self.get_vote_id_from_message_id(message_id).unwrap();
 
@@ -35,7 +35,7 @@ impl Database {
             };
             diesel::insert_into(crate::schema::VoteEventOptions::table)
                 .values(&option)
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
         Ok(vote_id)
     }
@@ -47,14 +47,14 @@ impl Database {
         use crate::schema::VoteEvents::dsl::*;
         Ok(VoteEvents
             .filter(message_id.eq(vote_message_id))
-            .first::<VoteEvent>(&self.pool.get()?)?)
+            .first::<VoteEvent>(&mut self.pool.get()?)?)
     }
 
     pub fn get_vote_event_from_id(&self, vote_id: i32) -> Result<VoteEvent, anyhow::Error> {
         use crate::schema::VoteEvents::dsl::*;
         Ok(VoteEvents
             .filter(id.eq(vote_id))
-            .first::<VoteEvent>(&self.pool.get()?)?)
+            .first::<VoteEvent>(&mut self.pool.get()?)?)
     }
 
     pub fn get_vote_id_from_message_id(&self, vote_message_id: u64) -> Result<i32, anyhow::Error> {
@@ -62,7 +62,7 @@ impl Database {
         Ok(VoteEvents
             .filter(message_id.eq(vote_message_id))
             .select(id)
-            .first::<i32>(&self.pool.get()?)?)
+            .first::<i32>(&mut self.pool.get()?)?)
     }
 
     #[allow(dead_code)]
@@ -75,7 +75,7 @@ impl Database {
         Ok(VoteEventOptions
             .filter(option_value.eq(vote_option_value).and(vote_id.eq(voteid)))
             .select(option_number)
-            .first::<i32>(&self.pool.get()?)?)
+            .first::<i32>(&mut self.pool.get()?)?)
     }
 
     pub fn get_options_by_vote_id(
@@ -85,14 +85,14 @@ impl Database {
         use crate::schema::VoteEventOptions::dsl::*;
         Ok(VoteEventOptions
             .filter(vote_id.eq(voteid))
-            .load::<VoteEventOption>(&self.pool.get()?)?)
+            .load::<VoteEventOption>(&mut self.pool.get()?)?)
     }
 
     pub fn get_votes_by_vote_id(&self, voteid: i32) -> Result<Vec<Vote>, anyhow::Error> {
         use crate::schema::Votes::dsl::*;
         Ok(Votes
             .filter(vote_id.eq(voteid))
-            .load::<Vote>(&self.pool.get()?)?)
+            .load::<Vote>(&mut self.pool.get()?)?)
     }
 
     pub fn user_vote(
@@ -107,7 +107,7 @@ impl Database {
             use crate::schema::Votes::dsl::*;
             diesel::delete(crate::schema::Votes::table)
                 .filter(vote_id.eq(db_vote_id).and(voter_id.eq(voterid)))
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
         let vote = NewVote {
             vote_id: db_vote_id,
@@ -116,13 +116,13 @@ impl Database {
         };
         diesel::insert_into(crate::schema::Votes::table)
             .values(&vote)
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
         Ok(())
     }
 
     pub fn get_vote_ids(&self) -> Result<Vec<i32>, anyhow::Error> {
         use crate::schema::VoteEvents::dsl::*;
-        Ok(VoteEvents.select(id).load::<i32>(&self.pool.get()?)?)
+        Ok(VoteEvents.select(id).load::<i32>(&mut self.pool.get()?)?)
     }
 
     pub fn purge_vote(&self, voteid: i32) -> Result<(), anyhow::Error> {
@@ -130,19 +130,19 @@ impl Database {
             use crate::schema::VoteEventOptions::dsl::*;
             diesel::delete(crate::schema::VoteEventOptions::table)
                 .filter(vote_id.eq(voteid))
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
         {
             use crate::schema::Votes::dsl::*;
             diesel::delete(crate::schema::Votes::table)
                 .filter(vote_id.eq(voteid))
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
         {
             use crate::schema::VoteEvents::dsl::*;
             diesel::delete(crate::schema::VoteEvents::table)
                 .filter(id.eq(voteid))
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
         Ok(())
     }

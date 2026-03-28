@@ -11,7 +11,7 @@ impl Database {
         let current_count = messages_day_stat
             .filter(userid.eq(in_userid.to_string()).and(date.eq(curdate)))
             .select(message_count)
-            .first::<Option<i32>>(&self.pool.get()?)
+            .first::<Option<i32>>(&mut self.pool.get()?)
             .unwrap_or(None);
 
         Ok(match current_count {
@@ -19,7 +19,7 @@ impl Database {
                 messages_day_stat.filter(userid.eq(in_userid.to_string()).and(date.eq(curdate))),
             )
             .set(message_count.eq(c + 1))
-            .execute(&self.pool.get()?)?,
+            .execute(&mut self.pool.get()?)?,
             None => {
                 let new_entry = crate::models::NewUserMessageStat {
                     date: curdate,
@@ -29,7 +29,7 @@ impl Database {
                 use crate::schema::messages_day_stat;
                 diesel::insert_into(messages_day_stat::table)
                     .values(&new_entry)
-                    .execute(&self.pool.get()?)?
+                    .execute(&mut self.pool.get()?)?
             }
         })
     }
@@ -40,7 +40,7 @@ impl Database {
         let value = messages_day_stat
             .filter(date.eq(curdate))
             .select(diesel::dsl::sum(message_count))
-            .first::<Option<i64>>(&self.pool.get()?)?;
+            .first::<Option<i64>>(&mut self.pool.get()?)?;
 
         let value = value.unwrap_or(0);
         Ok(value)
@@ -73,7 +73,7 @@ impl Database {
             .select((userid, message_count))
             .order(message_count.desc())
             .limit(winner_count)
-            .load::<(Option<String>, Option<i32>)>(&self.pool.get()?)?;
+            .load::<(Option<String>, Option<i32>)>(&mut self.pool.get()?)?;
 
         let members = members
             .iter()
@@ -90,7 +90,7 @@ impl Database {
             .filter(date.lt(curdate))
             .group_by(date)
             .select(diesel::dsl::sum(message_count))
-            .load::<Option<i64>>(&self.pool.get()?)?;
+            .load::<Option<i64>>(&mut self.pool.get()?)?;
 
         res.retain(|x| x.is_some());
         // Haskell :hear_eyes:
@@ -102,7 +102,7 @@ impl Database {
         Ok(AwardWinners
             .order_by(date.desc())
             .select(user_id)
-            .first(&self.pool.get()?)?)
+            .first(&mut self.pool.get()?)?)
     }
 
     pub async fn new_winner(&self, id: u64) -> Result<usize, anyhow::Error> {
@@ -113,6 +113,6 @@ impl Database {
         };
         Ok(diesel::insert_into(crate::schema::AwardWinners::table)
             .values(&new_winner)
-            .execute(&self.pool.get()?)?)
+            .execute(&mut self.pool.get()?)?)
     }
 }

@@ -21,12 +21,12 @@ version = "1.15"
 features = ["macros", "rt-multi-thread","signal"]
 
 [dependencies.diesel]
-version = "1.4"
+version = "2.2"
 features = ["mysql","chrono", "r2d2"]
 
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
-diesel_migrations = "1.4"
+diesel_migrations = "2.2"
 tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = {version = "0.3", features = ["env-filter"]}

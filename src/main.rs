@@ -8,10 +8,6 @@ mod voting;
 
 #[macro_use]
 extern crate tracing;
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
 
 use poise::serenity_prelude as serenity;
 use std::{collections::HashMap, sync::{Arc, LazyLock}};

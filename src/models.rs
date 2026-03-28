@@ -1,3 +1,5 @@
+use diesel::prelude::*;
+
 #[allow(dead_code)]
 #[derive(Queryable, Clone, Debug)]
 pub struct UserMessageStat {
@@ -10,7 +12,7 @@ pub struct UserMessageStat {
 use crate::schema::messages_day_stat;
 
 #[derive(Insertable)]
-#[table_name = "messages_day_stat"]
+#[diesel(table_name = messages_day_stat)]
 pub struct NewUserMessageStat {
     pub date: chrono::NaiveDate,
     pub userid: String,
@@ -40,7 +42,7 @@ pub struct CouncilVoting {
 use crate::schema::CouncilVotings;
 
 #[derive(Insertable)]
-#[table_name = "CouncilVotings"]
+#[diesel(table_name = CouncilVotings)]
 pub struct NewCouncilVoting {
     pub vote_message_id: u64,
     pub suspect_id: u64,
@@ -70,7 +72,7 @@ pub struct VotingAction {
 use crate::schema::VotingActions;
 
 #[derive(Insertable)]
-#[table_name = "VotingActions"]
+#[diesel(table_name = VotingActions)]
 pub struct NewVotingAction {
     pub vote_type: i32,
     pub voter_user_id: u64,
@@ -89,7 +91,7 @@ pub struct SuspectMessageEdit {
 use crate::schema::SuspectMessageEdits;
 
 #[derive(Insertable)]
-#[table_name = "SuspectMessageEdits"]
+#[diesel(table_name = SuspectMessageEdits)]
 pub struct NewSuspectMessageEdit {
     pub voting_message_id: u64,
     pub suspect_message_id: u64,
@@ -112,7 +114,7 @@ pub struct Giveaway {
 }
 
 #[derive(Insertable)]
-#[table_name = "Giveaways"]
+#[diesel(table_name = Giveaways)]
 pub struct NewGiveaway {
     pub message_id: u64,
     pub channel_id: u64,
@@ -132,7 +134,7 @@ pub struct GiveawayWinner {
 }
 
 #[derive(Insertable)]
-#[table_name = "GiveawayWinners"]
+#[diesel(table_name = GiveawayWinners)]
 pub struct NewGiveawayWinner {
     pub giveaway_id: i64,
     pub user_id: u64,
@@ -149,7 +151,7 @@ pub struct AwardWinner {
 use crate::schema::AwardWinners;
 
 #[derive(Insertable)]
-#[table_name = "AwardWinners"]
+#[diesel(table_name = AwardWinners)]
 pub struct NewAwardWinner {
     pub user_id: u64,
     pub date: chrono::NaiveDate,
@@ -165,7 +167,7 @@ pub struct SilencedMember {
 use crate::schema::SilencedMembers;
 
 #[derive(Insertable)]
-#[table_name = "SilencedMembers"]
+#[diesel(table_name = SilencedMembers)]
 pub struct NewSilencedMember {
     pub user_id: u64,
 }
@@ -184,7 +186,7 @@ pub struct VoteEvent {
 use crate::schema::VoteEvents;
 
 #[derive(Insertable)]
-#[table_name = "VoteEvents"]
+#[diesel(table_name = VoteEvents)]
 pub struct NewVoteEvent {
     pub message_id: u64,
     pub channel_id: u64,
@@ -205,7 +207,7 @@ pub struct VoteEventOption {
 use crate::schema::VoteEventOptions;
 
 #[derive(Insertable)]
-#[table_name = "VoteEventOptions"]
+#[diesel(table_name = VoteEventOptions)]
 pub struct NewVoteEventOption {
     pub vote_id: i32,
     pub option_number: i32,
@@ -223,7 +225,7 @@ pub struct Vote {
 use crate::schema::Votes;
 
 #[derive(Insertable)]
-#[table_name = "Votes"]
+#[diesel(table_name = Votes)]
 pub struct NewVote {
     pub vote_id: i32,
     pub voter_id: u64,

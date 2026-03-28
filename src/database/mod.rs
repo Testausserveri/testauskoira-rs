@@ -8,8 +8,9 @@ use diesel::{
     mysql::MysqlConnection,
     r2d2::{ConnectionManager, Pool},
 };
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
-embed_migrations!();
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[derive(Clone)]
 pub struct Database {
@@ -36,10 +37,10 @@ impl Database {
             .expect("DATABASE_URL must end with /database_name");
         let server_url = &database_url[..database_url.len() - db_name.len() - 1];
         {
-            let conn =
+            let mut conn =
                 MysqlConnection::establish(server_url).expect("Failed to connect to MySQL server");
             diesel::sql_query(format!("CREATE DATABASE IF NOT EXISTS `{db_name}`"))
-                .execute(&conn)
+                .execute(&mut conn)
                 .expect("Failed to create database");
         }
 
@@ -48,8 +49,8 @@ impl Database {
             .build(manager)
             .expect("Failed to create connection pool");
 
-        let conn = pool.get().expect("Failed to get connection for migrations");
-        embedded_migrations::run(&conn).expect("Failed to run database migrations");
+        let mut conn = pool.get().expect("Failed to get connection for migrations");
+        conn.run_pending_migrations(MIGRATIONS).expect("Failed to run database migrations");
 
         Self { pool }
     }

@@ -31,7 +31,7 @@ impl Database {
         };
         Ok(diesel::insert_into(crate::schema::CouncilVotings::table)
             .values(&new_voting)
-            .execute(&self.pool.get()?)?)
+            .execute(&mut self.pool.get()?)?)
     }
 
     pub async fn get_voting_event(
@@ -41,7 +41,7 @@ impl Database {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(CouncilVotings
             .filter(vote_message_id.eq(voting_message_id))
-            .first::<CouncilVoting>(&self.pool.get()?)?)
+            .first::<CouncilVoting>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_voting_event_votes(
@@ -51,7 +51,7 @@ impl Database {
         use crate::schema::VotingActions::dsl::*;
         Ok(VotingActions
             .filter(voting_message_id.eq(voting_messageid))
-            .load::<VotingAction>(&self.pool.get()?)?)
+            .load::<VotingAction>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_voting_event_edits(
@@ -62,14 +62,14 @@ impl Database {
         Ok(SuspectMessageEdits
             .filter(voting_message_id.eq(voting_messageid))
             .order_by(edit_time)
-            .load::<SuspectMessageEdit>(&self.pool.get()?)?)
+            .load::<SuspectMessageEdit>(&mut self.pool.get()?)?)
     }
 
     pub async fn is_reported(&self, message_id: u64) -> Result<bool, anyhow::Error> {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(!CouncilVotings
             .filter(suspect_message_id.eq(message_id))
-            .load::<CouncilVoting>(&self.pool.get()?)?
+            .load::<CouncilVoting>(&mut self.pool.get()?)?
             .is_empty())
     }
 
@@ -80,7 +80,7 @@ impl Database {
         use crate::schema::CouncilVotings::dsl::*;
         Ok(CouncilVotings
             .filter(suspect_message_id.eq(message_id))
-            .first::<CouncilVoting>(&self.pool.get()?)?)
+            .first::<CouncilVoting>(&mut self.pool.get()?)?)
     }
 
     pub async fn add_edit_event(
@@ -97,7 +97,7 @@ impl Database {
         Ok(
             diesel::insert_into(crate::schema::SuspectMessageEdits::table)
                 .values(&new_edit)
-                .execute(&self.pool.get()?)?,
+                .execute(&mut self.pool.get()?)?,
         )
     }
 
@@ -116,7 +116,7 @@ impl Database {
         Ok(
             diesel::insert_into(crate::schema::SuspectMessageEdits::table)
                 .values(&delete)
-                .execute(&self.pool.get()?)?,
+                .execute(&mut self.pool.get()?)?,
         )
     }
 
@@ -140,7 +140,7 @@ impl Database {
                         .and(voter_user_id.eq(vote.voter_user_id))
                         .and(voting_message_id.eq(vote.voting_message_id)),
                 )
-                .load::<VotingAction>(&self.pool.get()?)?
+                .load::<VotingAction>(&mut self.pool.get()?)?
                 .is_empty()
             {
                 return Ok(0);
@@ -149,24 +149,24 @@ impl Database {
 
         diesel::insert_into(crate::schema::VotingActions::table)
             .values(&vote)
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         use crate::schema::CouncilVotings::dsl::*;
         match vote_type {
             0 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(delete_votes.eq(delete_votes + 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             1 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(silence_votes.eq(silence_votes + 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             2 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(block_reporter_votes.eq(block_reporter_votes + 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             _ => Ok(0),
         }
@@ -192,7 +192,7 @@ impl Database {
                         .and(voter_user_id.eq(vote.voter_user_id))
                         .and(voting_message_id.eq(vote.voting_message_id)),
                 )
-                .load::<VotingAction>(&self.pool.get()?)?
+                .load::<VotingAction>(&mut self.pool.get()?)?
                 .is_empty()
             {
                 return Ok(0);
@@ -204,7 +204,7 @@ impl Database {
                         .and(voter_user_id.eq(vote.voter_user_id))
                         .and(voting_message_id.eq(vote.voting_message_id)),
                 )
-                .execute(&self.pool.get()?)?;
+                .execute(&mut self.pool.get()?)?;
         }
 
         use crate::schema::CouncilVotings::dsl::*;
@@ -212,17 +212,17 @@ impl Database {
             0 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(delete_votes.eq(delete_votes - 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             1 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(silence_votes.eq(silence_votes - 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             2 => Ok(
                 diesel::update(CouncilVotings.filter(vote_message_id.eq(voting_message_id)))
                     .set(block_reporter_votes.eq(block_reporter_votes - 1))
-                    .execute(&self.pool.get()?)?,
+                    .execute(&mut self.pool.get()?)?,
             ),
             _ => Ok(0),
         }
@@ -233,7 +233,7 @@ impl Database {
         Ok(
             diesel::update(CouncilVotings.filter(vote_message_id.eq(message_id)))
                 .set(useless_clicks.eq(useless_clicks + 1))
-                .execute(&self.pool.get()?)?,
+                .execute(&mut self.pool.get()?)?,
         )
     }
 
@@ -242,7 +242,7 @@ impl Database {
         Ok(SilencedMembers
             .filter(user_id.eq(userid))
             .select(id)
-            .first::<i32>(&self.pool.get()?)
+            .first::<i32>(&mut self.pool.get()?)
             .optional()?
             .is_some())
     }
@@ -251,14 +251,14 @@ impl Database {
         let new_silence = NewSilencedMember { user_id: userid };
         Ok(diesel::insert_into(crate::schema::SilencedMembers::table)
             .values(&new_silence)
-            .execute(&self.pool.get()?)?)
+            .execute(&mut self.pool.get()?)?)
     }
 
     pub async fn unsilence_user(&self, userid: u64) -> Result<usize, anyhow::Error> {
         use crate::schema::SilencedMembers::dsl::*;
         Ok(
             diesel::delete(SilencedMembers.filter(user_id.eq(userid)))
-                .execute(&self.pool.get()?)?,
+                .execute(&mut self.pool.get()?)?,
         )
     }
 }
