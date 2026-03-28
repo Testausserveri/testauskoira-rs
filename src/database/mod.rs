@@ -27,6 +27,10 @@ impl Database {
         let pool = Pool::builder()
             .build(manager)
             .expect("Failed to create connection pool");
+
+        let conn = pool.get().expect("Failed to get connection for migrations");
+        crate::run_migrations(&conn);
+
         Self { pool }
     }
 }

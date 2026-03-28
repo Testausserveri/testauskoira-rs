@@ -9,6 +9,14 @@ mod voting;
 extern crate tracing;
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
+
+embed_migrations!();
+
+pub fn run_migrations(conn: &diesel::MysqlConnection) {
+    embedded_migrations::run(conn).expect("Failed to run database migrations");
+}
 
 use poise::serenity_prelude as serenity;
 use std::{collections::HashMap, env, sync::Arc};
