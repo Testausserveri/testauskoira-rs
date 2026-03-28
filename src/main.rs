@@ -129,11 +129,18 @@ async fn event_handler(
                         commands::vote::user_vote(ctx, data, component.clone()).await;
                     }
                     id if id.starts_with("GIVEAWAY_") => {
-                        commands::giveaway::handle_component_interaction(ctx, data, component.clone())
-                            .await;
+                        commands::giveaway::handle_component_interaction(
+                            ctx,
+                            data,
+                            component.clone(),
+                        )
+                        .await;
                     }
                     _ => {
-                        debug!("Unknown component interaction: {}", component.data.custom_id);
+                        debug!(
+                            "Unknown component interaction: {}",
+                            component.data.custom_id
+                        );
                     }
                 }
             }
@@ -218,7 +225,7 @@ async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Me
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().expect("Failed to load .env file");
+    dotenv::dotenv().ok();
 
     tracing_subscriber::fmt::init();
 
@@ -321,8 +328,7 @@ async fn main() {
 
                 // Setup schedulers
                 let http = ctx.http.clone();
-                let mut scheduler =
-                    clokwerk::AsyncScheduler::with_tz(chrono::Local);
+                let mut scheduler = clokwerk::AsyncScheduler::with_tz(chrono::Local);
                 events::setup_schedulers(&mut scheduler, http, db_for_scheduler);
 
                 tokio::spawn(async move {

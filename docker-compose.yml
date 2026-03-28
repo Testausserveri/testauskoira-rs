@@ -3,7 +3,8 @@ version: "3"
 services:
   testauskoira-rs:
     build: .
-    image: ghcr.io/testausserveri/testauskoira-rs:main
+    #image: ghcr.io/testausserveri/testauskoira-rs:main
+    image: ghcr.io/testausserveri/testauskoira-rs:7v8bn81rba3ai88js4pjgpqljx1f5024
     restart: "unless-stopped"
     depends_on:
       - testauskoira_mariadb

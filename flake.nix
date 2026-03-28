@@ -2,8 +2,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     systems.url = "github:nix-systems/default";
-    devenv.url = "github:cachix/devenv";
-    devenv.inputs.nixpkgs.follows = "nixpkgs";
 
     fenix = {
       url = "github:nix-community/fenix";
@@ -16,29 +14,35 @@
     {
       self,
       nixpkgs,
-      devenv,
       systems,
       fenix,
       crane,
       ...
-    }@inputs:
+    }:
     let
       forEachSystem = nixpkgs.lib.genAttrs (import systems);
+
+      perSystem =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+
+          toolchain = fenix.packages.${system}.fromToolchainFile {
+            file = ./rust-toolchain.toml;
+            sha256 = "sha256-zC8E38iDVJ1oPIzCqTk/Ujo9+9kx9dXq7wAwPMpkpg0=";
+          };
+
+          craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+        in
+        { inherit pkgs toolchain craneLib; };
     in
     {
       packages = forEachSystem (
         system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
-
-          toolchain = fenix.packages.${system}.minimal.toolchain;
-
-          craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+          inherit (perSystem system) pkgs toolchain craneLib;
         in
         rec {
-          devenv-up = self.devShells.${system}.default.config.procfileScript;
-          devenv-test = self.devShells.${system}.default.config.test;
-
           default = craneLib.buildPackage {
             buildInputs = [
               pkgs.libmysqlclient
@@ -75,23 +79,17 @@
       devShells = forEachSystem (
         system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
+          inherit (perSystem system) pkgs craneLib;
         in
         {
-          default = devenv.lib.mkShell {
-            inherit inputs pkgs;
-            modules = [
-              {
-                languages.rust = {
-                  enable = true;
-                  toolchain = self.outputs.packages.${system}.rustToolchain;
-                };
-
-                packages = [
-                  pkgs.diesel-cli
-                ];
-              }
+          default = craneLib.devShell {
+            packages = [
+              pkgs.diesel-cli
+              pkgs.pkg-config
+              pkgs.libmysqlclient
             ];
+
+            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.libmysqlclient}/lib/mariadb";
           };
         }
       );
