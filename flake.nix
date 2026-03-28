@@ -94,7 +94,10 @@
             ;
         in
         rec {
-          default = craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
+          default = craneLib.buildPackage (commonArgs // {
+            inherit cargoArtifacts;
+            GIT_HASH = self.shortRev or self.dirtyShortRev or "NOCOMMITHASH";
+          });
 
           rustToolchain = toolchain;
 
@@ -139,7 +142,10 @@
             ;
         in
         {
-          build = craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
+          build = craneLib.buildPackage (commonArgs // {
+            inherit cargoArtifacts;
+            GIT_HASH = self.shortRev or self.dirtyShortRev or "NOCOMMITHASH";
+          });
           clippy = craneLib.cargoClippy (
             commonArgs
             // {

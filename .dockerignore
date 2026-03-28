@@ -1,8 +1,0 @@
-*
-!.git
-!build.rs
-!src
-!Cargo.toml
-!Cargo.lock
-!migrations
-!entrypoint.sh
