@@ -34,7 +34,6 @@ Tarvitset .env tiedoston joka sisältää kyseiset arvot:
 DATABASE_URL=
 DISCORD_TOKEN=
 MOD_CHANNEL_ID=
-APPLICATION_ID=
 GUILD_ID=
 AWARD_CHANNEL_ID=
 NO_REPORTS_ROLE_ID=
