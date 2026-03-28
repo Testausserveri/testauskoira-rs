@@ -111,7 +111,7 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
 
     match &winners[0].0.as_ref() {
         Ok(winner) => {
-            let img_name = build_award_image(&winner.face()).await;
+            let img_data = build_award_image(&winner.face()).await;
 
             give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.get())
                 .await;
@@ -119,15 +119,11 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
             let embed = build_embed(&winners);
 
             let mut msg_builder = CreateMessage::new();
-            if let Ok(ref img) = img_name {
-                let attachment = CreateAttachment::path(img).await;
-                if let Ok(attachment) = attachment {
-                    msg_builder = msg_builder.add_file(attachment);
-                    let embed = embed.image(format!("attachment://{}", img));
-                    msg_builder = msg_builder.embed(embed);
-                } else {
-                    msg_builder = msg_builder.embed(embed);
-                }
+            if let Ok(ref data) = img_data {
+                let attachment = CreateAttachment::bytes(data.as_slice(), "pfp_new.png");
+                msg_builder = msg_builder.add_file(attachment);
+                let embed = embed.image("attachment://pfp_new.png");
+                msg_builder = msg_builder.embed(embed);
             } else {
                 msg_builder = msg_builder.embed(embed);
             }
@@ -144,7 +140,7 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
     };
 }
 
-pub async fn build_award_image(user_img_url: &str) -> Result<String, anyhow::Error> {
+pub async fn build_award_image(user_img_url: &str) -> Result<Vec<u8>, anyhow::Error> {
     let img_url_base = &user_img_url[..user_img_url.rfind('.').unwrap()];
     let profile_picture = reqwest::get(format!("{}.png?size=128", img_url_base))
         .await?
@@ -167,7 +163,9 @@ pub async fn build_award_image(user_img_url: &str) -> Result<String, anyhow::Err
     }
 
     image::imageops::overlay(&mut pfp, &mask, 0, 0);
-    pfp.save("pfp_new.png")?;
 
-    Ok("pfp_new.png".to_string())
+    let mut buf = Vec::new();
+    image::DynamicImage::ImageRgba8(pfp).write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)?;
+
+    Ok(buf)
 }
