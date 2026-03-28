@@ -1,4 +1,5 @@
 mod commands;
+pub(crate) mod config;
 mod database;
 mod events;
 mod models;
@@ -13,8 +14,10 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 use poise::serenity_prelude as serenity;
-use std::{collections::HashMap, env, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, LazyLock}};
 use tokio::sync::Mutex;
+
+use config::CONFIG;
 
 use database::Database;
 use voting::PendingEdits;
@@ -77,13 +80,9 @@ async fn event_handler(
             event: _,
         } => {
             if let (Some(old_member), Some(new_member)) = (old_if_available, new) {
-                let silence_role = env::var("SILENCED_ROLE_ID")
-                    .expect("No SILENCED_ROLE_ID in env")
-                    .parse::<u64>()
-                    .unwrap();
-                let silence_role_id = serenity::RoleId::new(silence_role);
-                let old_silence = old_member.roles.contains(&silence_role_id);
-                let new_silence = new_member.roles.contains(&silence_role_id);
+                let silenced_role_id = serenity::RoleId::new(CONFIG.silenced_role_id);
+                let old_silence = old_member.roles.contains(&silenced_role_id);
+                let new_silence = new_member.roles.contains(&silenced_role_id);
                 if new_silence && !old_silence {
                     info!("Silencing user: {}", &new_member.user);
                     data.db.silence_user(new_member.user.id.get()).await.ok();
@@ -91,62 +90,52 @@ async fn event_handler(
                     info!("un-silencing user: {}", &new_member.user);
                     data.db.unsilence_user(new_member.user.id.get()).await.ok();
                 }
+
+                if old_member.pending && !new_member.pending {
+                    if let Err(e) = new_member
+                        .add_role(&ctx.http, serenity::RoleId::new(CONFIG.member_role_id))
+                        .await
+                    {
+                        error!("Failed to add member role to {}: {}", new_member.user, e);
+                    }
+                }
             }
         }
         serenity::FullEvent::GuildMemberAddition { new_member } => {
             info!("{} joined", new_member.user);
-            let member = new_member.clone();
-            if let Ok(is_silenced) = data.db.is_silenced(member.user.id.get()).await {
-                if is_silenced {
-                    info!("Adding silenced role to user {}", member.user);
-                    let silence_role = env::var("SILENCED_ROLE_ID")
-                        .expect("Expected SILENCED_ROLE_ID in .env")
-                        .parse::<u64>()
-                        .expect("Invalid SILENCED_ROLE_ID");
-                    member
-                        .add_role(&ctx.http, serenity::RoleId::new(silence_role))
-                        .await
-                        .unwrap();
-                }
-            }
-            let member_role = env::var("MEMBER_ROLE_ID")
-                .expect("member role id not found in $MEMBER_ROLE_ID")
-                .parse::<u64>()
-                .expect("Invalid member role id");
-            member
-                .add_role(&ctx.http, serenity::RoleId::new(member_role))
-                .await
-                .ok();
-        }
-        serenity::FullEvent::InteractionCreate { interaction } => {
-            if let serenity::Interaction::Component(component) = interaction {
-                match component.data.custom_id.as_str() {
-                    "give_role_menu" => {
-                        commands::role::handle_menu_button(ctx, component.clone()).await;
-                    }
-                    "delete_button" | "ban_button" | "abuse_button" | "useless_button" => {
-                        voting::handle_vote_interaction(ctx, data, component.clone()).await;
-                    }
-                    id if id.starts_with("vote_") => {
-                        commands::vote::user_vote(ctx, data, component.clone()).await;
-                    }
-                    id if id.starts_with("GIVEAWAY_") => {
-                        commands::giveaway::handle_component_interaction(
-                            ctx,
-                            data,
-                            component.clone(),
-                        )
-                        .await;
-                    }
-                    _ => {
-                        debug!(
-                            "Unknown component interaction: {}",
-                            component.data.custom_id
-                        );
-                    }
+            if let Ok(true) = data.db.is_silenced(new_member.user.id.get()).await {
+                info!("Adding silenced role to user {}", new_member.user);
+                if let Err(e) = new_member
+                    .add_role(&ctx.http, serenity::RoleId::new(CONFIG.silenced_role_id))
+                    .await
+                {
+                    error!("Failed to add silence role to {}: {}", new_member.user, e);
                 }
             }
         }
+        serenity::FullEvent::InteractionCreate {
+            interaction: serenity::Interaction::Component(component),
+        } => match component.data.custom_id.as_str() {
+            "give_role_menu" => {
+                commands::role::handle_menu_button(ctx, component.clone()).await;
+            }
+            "delete_button" | "ban_button" | "abuse_button" | "useless_button" => {
+                voting::handle_vote_interaction(ctx, data, component.clone()).await;
+            }
+            id if id.starts_with("vote_") => {
+                commands::vote::user_vote(ctx, data, component.clone()).await;
+            }
+            id if id.starts_with("GIVEAWAY_") => {
+                commands::giveaway::handle_component_interaction(ctx, data, component.clone())
+                    .await;
+            }
+            _ => {
+                debug!(
+                    "Unknown component interaction: {}",
+                    component.data.custom_id
+                );
+            }
+        },
         serenity::FullEvent::Resume { .. } => {
             info!("Resumed");
         }
@@ -205,7 +194,7 @@ async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Me
 
     // Increment message count
     if let Some(gid) = msg.guild_id {
-        if gid == env::var("GUILD_ID").unwrap().parse::<u64>().unwrap() && !msg.author.bot {
+        if gid == CONFIG.guild_id && !msg.author.bot {
             let is_private_thread = ctx
                 .cache
                 .guild(gid)
@@ -229,12 +218,12 @@ async fn handle_message(ctx: &serenity::Context, data: &Data, msg: &serenity::Me
 async fn main() {
     dotenv::dotenv().ok();
 
+    LazyLock::force(&CONFIG);
+
     tracing_subscriber::fmt::init();
 
     let database = Arc::new(Database::new().await);
     let pending_edits = PendingEdits::new();
-
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let words = match std::fs::read_to_string("blacklist.txt") {
         Ok(s) => s,
@@ -301,22 +290,17 @@ async fn main() {
         })
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
-                let guild_id = serenity::GuildId::new(
-                    env::var("GUILD_ID")
-                        .expect("No GUILD_ID in .env")
-                        .parse()
-                        .expect("Invalid GUILD_ID provided"),
-                );
-                poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id)
-                    .await?;
+                poise::builtins::register_in_guild(
+                    ctx,
+                    &framework.options().commands,
+                    serenity::GuildId::new(CONFIG.guild_id),
+                )
+                .await?;
 
                 info!("Connected and commands registered");
 
-                if let Ok(s) = env::var("STATUS_CHANNEL_ID") {
-                    let status_channel_id = serenity::ChannelId::new(
-                        s.parse().expect("Invalid STATUS_CHANNEL_ID provided"),
-                    );
-                    status_channel_id
+                if let Some(id) = CONFIG.status_channel_id {
+                    serenity::ChannelId::new(id)
                         .send_message(
                             &ctx.http,
                             serenity::CreateMessage::new().content(format!(
@@ -350,7 +334,7 @@ async fn main() {
         | serenity::GatewayIntents::GUILD_PRESENCES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = serenity::ClientBuilder::new(token, intents)
+    let mut client = serenity::ClientBuilder::new(&CONFIG.discord_token, intents)
         .framework(framework)
         .await
         .expect("Err creating client");

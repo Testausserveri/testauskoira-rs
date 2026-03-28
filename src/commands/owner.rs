@@ -1,4 +1,4 @@
-use crate::{events::activity_award::display_winner, Context, Error};
+use crate::{Context, Error, events::activity_award::display_winner};
 
 /// Shut down the bot
 #[poise::command(prefix_command, owners_only)]

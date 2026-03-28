@@ -3,9 +3,9 @@ use std::sync::Arc;
 use poise::serenity_prelude::{self as serenity, *};
 
 use crate::{
+    Context, Data, Error,
     database::Database,
     models::{Vote, VoteEvent, VoteEventOption},
-    Context, Data, Error,
 };
 
 fn generate_vote_message(
@@ -30,8 +30,7 @@ fn generate_vote_message(
     }
     desc_vote_options.push(format!(
         "End time: <t:{}:R>",
-        vote.start_time.and_utc().timestamp()
-            + vote.duration as i64
+        vote.start_time.and_utc().timestamp() + vote.duration as i64
     ));
 
     let embed = CreateEmbed::new()
@@ -54,11 +53,7 @@ fn generate_vote_message(
         .components(vec![CreateActionRow::Buttons(buttons)])
 }
 
-pub async fn update_vote(
-    http: &Http,
-    db: &Database,
-    vote_id: i32,
-) -> Result<(), anyhow::Error> {
+pub async fn update_vote(http: &Http, db: &Database, vote_id: i32) -> Result<(), anyhow::Error> {
     let cur_time = chrono::Local::now().naive_local();
     let vote_event = db.get_vote_event_from_id(vote_id)?;
     if (vote_event.duration as i32) < (cur_time - vote_event.start_time).num_seconds() as i32 {
@@ -66,7 +61,10 @@ pub async fn update_vote(
     }
     let options = db.get_options_by_vote_id(vote_id).unwrap();
     let votes = db.get_votes_by_vote_id(vote_id).unwrap();
-    let author = http.get_user(UserId::new(vote_event.author_id)).await.unwrap();
+    let author = http
+        .get_user(UserId::new(vote_event.author_id))
+        .await
+        .unwrap();
     let mut message = http
         .get_message(
             ChannelId::new(vote_event.channel_id),
@@ -113,11 +111,7 @@ pub async fn end_vote(http: &Http, db: &Database, vote: VoteEvent) -> Result<(),
     Ok(())
 }
 
-pub async fn user_vote(
-    ctx: &serenity::Context,
-    data: &Data,
-    interaction: ComponentInteraction,
-) {
+pub async fn user_vote(ctx: &serenity::Context, data: &Data, interaction: ComponentInteraction) {
     let option = interaction
         .data
         .custom_id
@@ -196,9 +190,12 @@ pub async fn vote(
         .get_vote_event_from_message_id(vote_message.id.get())
         .unwrap();
     let vote_options = data.db.get_options_by_vote_id(vote_id).unwrap();
-    let edit_msg =
-        generate_vote_message(vote_event, Vec::new(), vote_options, ctx.author());
-    if vote_message.edit(&serenity_ctx.http, edit_msg).await.is_err() {
+    let edit_msg = generate_vote_message(vote_event, Vec::new(), vote_options, ctx.author());
+    if vote_message
+        .edit(&serenity_ctx.http, edit_msg)
+        .await
+        .is_err()
+    {
         data.db.purge_vote(vote_id).unwrap();
         ctx.send(
             poise::CreateReply::default()

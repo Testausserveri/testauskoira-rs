@@ -92,10 +92,7 @@ impl Database {
             voting_message_id,
             suspect_message_id: update_event.id.get(),
             new_content: update_event.content.unwrap_or_default(),
-            edit_time: update_event
-                .edited_timestamp
-                .unwrap()
-                .naive_local(),
+            edit_time: update_event.edited_timestamp.unwrap().naive_local(),
         };
         Ok(
             diesel::insert_into(crate::schema::SuspectMessageEdits::table)

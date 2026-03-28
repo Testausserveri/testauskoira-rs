@@ -1,28 +1,23 @@
-use std::{env, io::Cursor, sync::Arc};
+use std::{io::Cursor, sync::Arc};
 
 use futures::prelude::*;
-use poise::serenity_prelude::{ChannelId, Colour, CreateAttachment, CreateEmbed, CreateMessage, Http};
+use poise::serenity_prelude::{
+    ChannelId, Colour, CreateAttachment, CreateEmbed, CreateMessage, Http,
+};
 use tracing::error;
 
 use crate::database::Database;
 
 async fn give_award_role(http: &Http, db: Arc<Database>, winner: u64) {
-    let award_role_id: u64 = env::var("AWARD_ROLE_ID")
-        .expect("No AWARD_ROLE_ID in .env")
-        .parse()
-        .expect("Invalid AWARD_ROLE_ID");
-
-    let guild_id: u64 = env::var("GUILD_ID")
-        .expect("Expected GUILD_ID in .env")
-        .parse()
-        .expect("Invalid GUILD_ID provided");
-
-    let guild_id = poise::serenity_prelude::GuildId::new(guild_id);
-    let award_role_id = poise::serenity_prelude::RoleId::new(award_role_id);
+    let guild_id = poise::serenity_prelude::GuildId::new(crate::config::CONFIG.guild_id);
+    let award_role_id = poise::serenity_prelude::RoleId::new(crate::config::CONFIG.award_role_id);
 
     if let Ok(previous_winner) = db.get_last_winner().await {
         if let Ok(member) = http
-            .get_member(guild_id, poise::serenity_prelude::UserId::new(previous_winner))
+            .get_member(
+                guild_id,
+                poise::serenity_prelude::UserId::new(previous_winner),
+            )
             .await
         {
             member.remove_role(http, award_role_id).await.ok();
@@ -46,12 +41,7 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
     let total_msgs = db.get_total_daily_messages(offset).await.unwrap();
     let messages_average = db.get_total_message_average(offset).await.unwrap();
 
-    let channel = ChannelId::new(
-        env::var("AWARD_CHANNEL_ID")
-            .unwrap()
-            .parse::<u64>()
-            .unwrap(),
-    );
+    let channel = ChannelId::new(crate::config::CONFIG.award_channel_id);
 
     let guild_id = channel
         .to_channel(&http)
@@ -113,8 +103,12 @@ pub async fn display_winner(http: Arc<Http>, db: Arc<Database>, offset: i32) {
         Ok(winner) => {
             let img_data = build_award_image(&winner.face()).await;
 
-            give_award_role(&http, db.clone(), winners[0].0.as_ref().unwrap().user.id.get())
-                .await;
+            give_award_role(
+                &http,
+                db.clone(),
+                winners[0].0.as_ref().unwrap().user.id.get(),
+            )
+            .await;
 
             let embed = build_embed(&winners);
 
@@ -165,7 +159,8 @@ pub async fn build_award_image(user_img_url: &str) -> Result<Vec<u8>, anyhow::Er
     image::imageops::overlay(&mut pfp, &mask, 0, 0);
 
     let mut buf = Vec::new();
-    image::DynamicImage::ImageRgba8(pfp).write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)?;
+    image::DynamicImage::ImageRgba8(pfp)
+        .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)?;
 
     Ok(buf)
 }

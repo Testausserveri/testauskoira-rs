@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[derive(Queryable, Clone, Debug)]
 pub struct UserMessageStat {
     pub id: i32,
@@ -137,6 +138,7 @@ pub struct NewGiveawayWinner {
     pub user_id: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Queryable)]
 pub struct AwardWinner {
     pub id: i32,
@@ -153,6 +155,7 @@ pub struct NewAwardWinner {
     pub date: chrono::NaiveDate,
 }
 
+#[allow(dead_code)]
 #[derive(Queryable)]
 pub struct SilencedMember {
     pub id: i32,

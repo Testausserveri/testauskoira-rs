@@ -64,8 +64,7 @@ impl Database {
             }
         };
         let blacklist = blacklist.lines();
-        let curdate =
-            chrono::Local::now().date_naive() - chrono::Duration::days(days_pre.into());
+        let curdate = chrono::Local::now().date_naive() - chrono::Duration::days(days_pre.into());
 
         use crate::schema::messages_day_stat::dsl::*;
 

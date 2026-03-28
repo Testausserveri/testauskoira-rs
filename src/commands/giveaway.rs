@@ -1,7 +1,7 @@
 use poise::serenity_prelude::{self as serenity, *};
 use rand::seq::SliceRandom;
 
-use crate::{database::Database, models::Giveaway, Context, Data, Error};
+use crate::{Context, Data, Error, database::Database, models::Giveaway};
 
 #[derive(Debug, poise::ChoiceParameter)]
 pub enum EditField {
@@ -25,10 +25,7 @@ fn generate_list_components(offset: i64, giveaways: i64) -> Vec<CreateActionRow>
 }
 
 async fn generate_list_embeds(db: &Database, offset: i64) -> Vec<CreateEmbed> {
-    let giveaways = db
-        .get_n_giveaways_with_offset(10, offset)
-        .await
-        .unwrap();
+    let giveaways = db.get_n_giveaways_with_offset(10, offset).await.unwrap();
     let mut giveaway_winners = Vec::with_capacity(giveaways.len());
 
     for g in giveaways.iter() {
@@ -90,7 +87,7 @@ async fn get_reacters(
     }
 }
 
-async fn roll_winners(candidates: &Vec<User>, max_winners: i64) -> Vec<User> {
+async fn roll_winners(candidates: &[User], max_winners: i64) -> Vec<User> {
     candidates
         .choose_multiple(&mut rand::thread_rng(), max_winners as usize)
         .map(|x| x.to_owned())
@@ -137,9 +134,10 @@ async fn roll_giveaway(
                     .title(&giveaway.prize)
                     .description(format!("Winners: {}", winners_string))
                     .timestamp(Timestamp::from(giveaway.end_time.and_utc()))
-                    .footer(CreateEmbedFooter::new(
-                        format!("ID: {} | ended at", giveaway.id),
-                    )),
+                    .footer(CreateEmbedFooter::new(format!(
+                        "ID: {} | ended at",
+                        giveaway.id
+                    ))),
             ),
         )
         .await?;
@@ -160,11 +158,8 @@ async fn roll_giveaway(
             )
             .await?;
     }
-    db.add_giveaway_winners(
-        giveaway.id,
-        &winners.iter().map(|u| u.id.get()).collect(),
-    )
-    .await?;
+    db.add_giveaway_winners(giveaway.id, &winners.iter().map(|u| u.id.get()).collect())
+        .await?;
     info!("Successfully rolled winners for giveaway {}", giveaway.id);
     Ok(())
 }
@@ -254,27 +249,11 @@ pub async fn start(
     let data = ctx.data();
     let serenity_ctx = ctx.serenity_context();
 
-    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
-        .unwrap_or("🎉".to_string())
-        .parse()
-        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+    let giveaway_emoji = crate::config::CONFIG.giveaway_reaction_emoji;
 
-    let default_duration: i64 = std::env::var("GIVEAWAY_DEFAULT_DURATION")
-        .unwrap_or("3600".to_string())
-        .parse()
-        .expect("GIVEAWAY_DEFAULT_DURATION is not a valid integer");
-
-    let default_winners: i64 = std::env::var("GIVEAWAY_DEFAULT_WINNERS")
-        .unwrap_or("1".to_string())
-        .parse()
-        .expect("GIVEAWAY_DEFAULT_WINNERS is not a valid integer");
-
-    let default_prize: String =
-        std::env::var("GIVEAWAY_DEFAULT_PRIZE").unwrap_or("Nothing".to_string());
-
-    let duration = duration.unwrap_or(default_duration);
-    let winners = winners.unwrap_or(default_winners);
-    let prize = prize.unwrap_or(default_prize);
+    let duration = duration.unwrap_or(crate::config::CONFIG.giveaway_default_duration);
+    let winners = winners.unwrap_or(crate::config::CONFIG.giveaway_default_winners);
+    let prize = prize.unwrap_or_else(|| crate::config::CONFIG.giveaway_default_prize.clone());
 
     if winners < 1 || duration < 1 {
         ctx.send(
@@ -333,10 +312,7 @@ pub async fn start(
             ctx.send(
                 poise::CreateReply::default()
                     .ephemeral(true)
-                    .content(format!(
-                        "Giveaway started in <#{}>",
-                        channel.id.get()
-                    )),
+                    .content(format!("Giveaway started in <#{}>", channel.id.get())),
             )
             .await?;
             info!(
@@ -396,10 +372,7 @@ pub async fn reroll(
     let serenity_ctx = ctx.serenity_context();
     let allow_past = allow_past.unwrap_or(false);
 
-    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
-        .unwrap_or("🎉".to_string())
-        .parse()
-        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+    let giveaway_emoji = crate::config::CONFIG.giveaway_reaction_emoji;
 
     let giveaway = data.db.get_giveaway(giveaway_id).await.unwrap();
 
@@ -482,9 +455,10 @@ pub async fn edit(
                             .title(&giveaway.prize)
                             .description(format!("{} winners", new_value))
                             .timestamp(Timestamp::from(giveaway.end_time.and_utc()))
-                            .footer(CreateEmbedFooter::new(
-                                format!("ID: {} | ends at", giveaway_id),
-                            )),
+                            .footer(CreateEmbedFooter::new(format!(
+                                "ID: {} | ends at",
+                                giveaway_id
+                            ))),
                     ),
                 )
                 .await
@@ -518,9 +492,10 @@ pub async fn edit(
                             .title(&giveaway.prize)
                             .description(format!("{} winners", giveaway.max_winners))
                             .timestamp(Timestamp::from(new_time.and_utc()))
-                            .footer(CreateEmbedFooter::new(
-                                format!("ID: {} | ends at", giveaway.id),
-                            )),
+                            .footer(CreateEmbedFooter::new(format!(
+                                "ID: {} | ends at",
+                                giveaway.id
+                            ))),
                     ),
                 )
                 .await
@@ -551,10 +526,7 @@ pub async fn end(
     let data = ctx.data();
     let serenity_ctx = ctx.serenity_context();
 
-    let giveaway_emoji: char = std::env::var("GIVEAWAY_REACTION_EMOJI")
-        .unwrap_or("🎉".to_string())
-        .parse()
-        .expect("GIVEAWAY_REACTION_EMOJI is not a valid char");
+    let giveaway_emoji = crate::config::CONFIG.giveaway_reaction_emoji;
 
     match data.db.get_giveaway(giveaway_id).await {
         Ok(giveaway) => {
@@ -590,27 +562,25 @@ pub async fn end(
             )
             .await?;
         }
-        Err(e) => {
-            match e.downcast_ref::<diesel::result::Error>() {
-                Some(diesel::result::Error::NotFound) => {
-                    ctx.send(
-                        poise::CreateReply::default()
-                            .ephemeral(true)
-                            .content("Giveaway not found"),
-                    )
-                    .await?;
-                }
-                _ => {
-                    error!("Error while ending giveaway {}: {}", giveaway_id, e);
-                    ctx.send(
-                        poise::CreateReply::default()
-                            .ephemeral(true)
-                            .content("An error occurred while ending the giveaway"),
-                    )
-                    .await?;
-                }
+        Err(e) => match e.downcast_ref::<diesel::result::Error>() {
+            Some(diesel::result::Error::NotFound) => {
+                ctx.send(
+                    poise::CreateReply::default()
+                        .ephemeral(true)
+                        .content("Giveaway not found"),
+                )
+                .await?;
             }
-        }
+            _ => {
+                error!("Error while ending giveaway {}: {}", giveaway_id, e);
+                ctx.send(
+                    poise::CreateReply::default()
+                        .ephemeral(true)
+                        .content("An error occurred while ending the giveaway"),
+                )
+                .await?;
+            }
+        },
     }
     Ok(())
 }
@@ -649,27 +619,25 @@ pub async fn delete(
             )
             .await?;
         }
-        Err(e) => {
-            match e.downcast_ref::<diesel::result::Error>() {
-                Some(diesel::result::Error::NotFound) => {
-                    ctx.send(
-                        poise::CreateReply::default()
-                            .ephemeral(true)
-                            .content("Giveaway not found"),
-                    )
-                    .await?;
-                }
-                _ => {
-                    error!("Error while deleting giveaway {}: {}", giveaway_id, e);
-                    ctx.send(
-                        poise::CreateReply::default()
-                            .ephemeral(true)
-                            .content("An error occurred while deleting the giveaway"),
-                    )
-                    .await?;
-                }
+        Err(e) => match e.downcast_ref::<diesel::result::Error>() {
+            Some(diesel::result::Error::NotFound) => {
+                ctx.send(
+                    poise::CreateReply::default()
+                        .ephemeral(true)
+                        .content("Giveaway not found"),
+                )
+                .await?;
             }
-        }
+            _ => {
+                error!("Error while deleting giveaway {}: {}", giveaway_id, e);
+                ctx.send(
+                    poise::CreateReply::default()
+                        .ephemeral(true)
+                        .content("An error occurred while deleting the giveaway"),
+                )
+                .await?;
+            }
+        },
     }
     Ok(())
 }

@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use poise::serenity_prelude::{self as serenity, *};
 
 use crate::{
-    models::{CouncilVoting, SuspectMessageEdit, VotingAction},
     Data, Error,
+    models::{CouncilVoting, SuspectMessageEdit, VotingAction},
 };
 
 pub struct PendingEdits {
@@ -55,10 +55,11 @@ fn generate_moderation_message(
     votes: Vec<VotingAction>,
     suspect_tag: String,
 ) -> EditMessage {
-    let guild_id = std::env::var("GUILD_ID").expect("NO GUILD_ID in .env");
     let message_link = format!(
         "https://discord.com/channels/{}/{}/{}",
-        guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
+        crate::config::CONFIG.guild_id,
+        voting.suspect_message_channel_id,
+        voting.suspect_message_id
     );
     let delete_voters = filter_votes(0, &votes);
     let silence_voters = filter_votes(1, &votes);
@@ -67,7 +68,11 @@ fn generate_moderation_message(
     let main_embed = CreateEmbed::new()
         .colour(Colour::RED)
         .title("Viestistä on tehty ilmoitus!")
-        .field("Arvojäseniä paikalla", format!("{}", voting.moderators_online), true)
+        .field(
+            "Arvojäseniä paikalla",
+            format!("{}", voting.moderators_online),
+            true,
+        )
         .field(
             "Viestin kanava",
             format!("<#{}>", voting.suspect_message_channel_id),
@@ -119,14 +124,9 @@ fn generate_moderation_message(
     let mut embeds = vec![main_embed];
     for edit in &edits {
         if edit.new_content.is_empty() {
-            embeds.push(
-                CreateEmbed::new()
-                    .title("Viesti on poistettu")
-                    .footer(CreateEmbedFooter::new(format!(
-                        "Poiston ajankohta: {}",
-                        edit.edit_time
-                    ))),
-            );
+            embeds.push(CreateEmbed::new().title("Viesti on poistettu").footer(
+                CreateEmbedFooter::new(format!("Poiston ajankohta: {}", edit.edit_time)),
+            ));
             break;
         }
         embeds.push(
@@ -178,10 +178,7 @@ fn generate_moderation_message(
 }
 
 async fn update_voting_message(ctx: &serenity::Context, data: &Data, voting_message_id: u64) {
-    let moderation_channel_id: u64 = std::env::var("MOD_CHANNEL_ID")
-        .expect("No MOD_CHANNEL_ID in .env")
-        .parse()
-        .expect("Invalid MOD_CHANNEL_ID provided");
+    let moderation_channel_id = crate::config::CONFIG.mod_channel_id;
     let event = data.db.get_voting_event(voting_message_id).await.unwrap();
     let votes = data
         .db
@@ -201,23 +198,18 @@ async fn update_voting_message(ctx: &serenity::Context, data: &Data, voting_mess
         )
         .await
         .unwrap();
-    let suspect_tag =
-        if let Ok(user) = UserId::new(event.suspect_id).to_user(&ctx.http).await {
-            user.name.clone()
-        } else {
-            String::from("[Poistettu käyttäjä]")
-        };
+    let suspect_tag = if let Ok(user) = UserId::new(event.suspect_id).to_user(&ctx.http).await {
+        user.name.clone()
+    } else {
+        String::from("[Poistettu käyttäjä]")
+    };
     let edit_msg = generate_moderation_message(event, edits, votes, suspect_tag);
     message.edit(&ctx.http, edit_msg).await.unwrap()
 }
 
 /// This handles a message_changed event and checks for
 /// reported messages that are edited.
-pub async fn handle_edit(
-    ctx: &serenity::Context,
-    data: &Data,
-    event: &MessageUpdateEvent,
-) {
+pub async fn handle_edit(ctx: &serenity::Context, data: &Data, event: &MessageUpdateEvent) {
     if !is_reported(data, event.id.get()).await {
         return;
     }
@@ -230,15 +222,11 @@ pub async fn handle_edit(
         .add_edit_event(event.to_owned(), voting_event.vote_message_id)
         .await
         .unwrap();
-    update_voting_message(ctx, data, voting_event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, voting_event.vote_message_id).await;
 }
 
 /// This handles the deletion of a message
-pub async fn handle_delete(
-    ctx: &serenity::Context,
-    data: &Data,
-    message_id: MessageId,
-) {
+pub async fn handle_delete(ctx: &serenity::Context, data: &Data, message_id: MessageId) {
     if !is_reported(data, message_id.get()).await {
         return;
     }
@@ -254,36 +242,26 @@ pub async fn handle_delete(
         )
         .await
         .unwrap();
-    update_voting_message(ctx, data, voting_event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, voting_event.vote_message_id).await;
 }
 
 /// Handles an event where a message was reported using the context menu command
 #[poise::command(context_menu_command = "\u{26d4} Ilmianna viesti")]
-pub async fn report_message(
-    ctx: crate::Context<'_>,
-    msg: Message,
-) -> Result<(), Error> {
+pub async fn report_message(ctx: crate::Context<'_>, msg: Message) -> Result<(), Error> {
     let data = ctx.data();
     let serenity_ctx = ctx.serenity_context();
 
-    let no_reports_role_id: u64 = std::env::var("NO_REPORTS_ROLE_ID")
-        .expect("Expected NO_REPORTS_ROLE_ID in .env")
-        .parse()
-        .expect("Invalid NO_REPORTS_ROLE_ID provided");
-
-    let guild_id: u64 = std::env::var("GUILD_ID")
-        .expect("Expected GUILD_ID in .env")
-        .parse()
-        .expect("Invalid GUILD_ID provided");
-
-    let moderation_channel_id = std::env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid MOD_CHANNEL_ID provided");
+    let no_reports_role_id = crate::config::CONFIG.no_reports_role_id;
+    let guild_id = crate::config::CONFIG.guild_id;
+    let moderation_channel_id = crate::config::CONFIG.mod_channel_id;
 
     if ctx
         .author()
-        .has_role(&serenity_ctx.http, GuildId::new(guild_id), RoleId::new(no_reports_role_id))
+        .has_role(
+            &serenity_ctx.http,
+            GuildId::new(guild_id),
+            RoleId::new(no_reports_role_id),
+        )
         .await
         .unwrap()
     {
@@ -349,13 +327,9 @@ pub async fn report_message(
 
 /// Get the amount of online members who have access to the moderation channel.
 async fn get_online_mod_count(ctx: &serenity::Context) -> usize {
-    let channelid = std::env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod role id");
     if let Channel::Guild(channel) = ctx
         .http
-        .get_channel(ChannelId::new(channelid))
+        .get_channel(ChannelId::new(crate::config::CONFIG.mod_channel_id))
         .await
         .unwrap()
     {
@@ -369,13 +343,9 @@ async fn get_online_mod_count(ctx: &serenity::Context) -> usize {
 
 /// Check if the given user is a moderator or not
 async fn is_moderator(ctx: &serenity::Context, user: &User) -> bool {
-    let channelid = std::env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod role id");
     if let Channel::Guild(channel) = ctx
         .http
-        .get_channel(ChannelId::new(channelid))
+        .get_channel(ChannelId::new(crate::config::CONFIG.mod_channel_id))
         .await
         .unwrap()
     {
@@ -391,12 +361,7 @@ async fn is_moderator(ctx: &serenity::Context, user: &User) -> bool {
 }
 
 /// Handle the "delete_button" vote
-async fn handle_delete_vote(
-    ctx: &serenity::Context,
-    data: &Data,
-    voter: &User,
-    message: &Message,
-) {
+async fn handle_delete_vote(ctx: &serenity::Context, data: &Data, voter: &User, message: &Message) {
     let event = data.db.get_voting_event(message.id.get()).await.unwrap();
     if event.delete_votes == event.delete_votes_required {
         return;
@@ -418,8 +383,8 @@ async fn handle_delete_vote(
             let suspect_msg = ctx
                 .http
                 .get_message(
-                    ChannelId::new(event.suspect_message_channel_id as u64),
-                    MessageId::new(event.suspect_message_id as u64),
+                    ChannelId::new(event.suspect_message_channel_id),
+                    MessageId::new(event.suspect_message_id),
                 )
                 .await
                 .unwrap();
@@ -430,7 +395,7 @@ async fn handle_delete_vote(
                 .unwrap();
         }
     }
-    update_voting_message(ctx, data, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
 /// Handle the "ban_button" (silence) vote
@@ -458,22 +423,20 @@ async fn handle_silence_vote(
     } else {
         let event = data.db.get_voting_event(message.id.get()).await.unwrap();
         if event.silence_votes == event.silence_votes_required {
-            let guild_id: u64 = std::env::var("GUILD_ID")
-                .expect("Expected GUILD_ID in .env")
-                .parse()
-                .expect("Invalid GUILD_ID provided");
-            let silence_role: u64 = std::env::var("SILENCED_ROLE_ID")
-                .expect("Expected SILENCED_ROLE_ID in .env")
-                .parse()
-                .expect("Invalid SILENCED_ROLE_ID provided");
             let mut member = ctx
                 .http
-                .get_member(GuildId::new(guild_id), UserId::new(event.suspect_id as u64))
+                .get_member(
+                    GuildId::new(crate::config::CONFIG.guild_id),
+                    UserId::new(event.suspect_id),
+                )
                 .await
                 .unwrap();
             data.db.silence_user(member.user.id.get()).await.ok();
             member
-                .add_role(&ctx.http, RoleId::new(silence_role))
+                .add_role(
+                    &ctx.http,
+                    RoleId::new(crate::config::CONFIG.silenced_role_id),
+                )
                 .await
                 .ok();
             member
@@ -483,8 +446,7 @@ async fn handle_silence_vote(
                 )
                 .await
                 .unwrap();
-            let rules_channel_id =
-                std::env::var("RULES_CHANNEL_ID").expect("RULES_CHANNEL_ID is not set");
+            let rules_channel_id = crate::config::CONFIG.rules_channel_id;
             if member
                 .user
                 .dm(
@@ -504,16 +466,11 @@ async fn handle_silence_vote(
             }
         }
     }
-    update_voting_message(ctx, data, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
 /// Handle the "abuse_button" vote
-async fn handle_abuse_vote(
-    ctx: &serenity::Context,
-    data: &Data,
-    voter: &User,
-    message: &Message,
-) {
+async fn handle_abuse_vote(ctx: &serenity::Context, data: &Data, voter: &User, message: &Message) {
     let event = data.db.get_voting_event(message.id.get()).await.unwrap();
     if event.block_reporter_votes == event.block_reporter_votes_required {
         return;
@@ -532,29 +489,24 @@ async fn handle_abuse_vote(
     } else {
         let event = data.db.get_voting_event(message.id.get()).await.unwrap();
         if event.block_reporter_votes == event.block_reporter_votes_required {
-            let guild_id: u64 = std::env::var("GUILD_ID")
-                .expect("Expected GUILD_ID in .env")
-                .parse()
-                .expect("Invalid GUILD_ID provided");
-            let abuse_role: u64 = std::env::var("NO_REPORTS_ROLE_ID")
-                .expect("Expected NO_REPORTS_ROLE_ID in .env")
-                .parse()
-                .expect("Invalid NO_REPORTS_ROLE_ID provided");
             let member = ctx
                 .http
                 .get_member(
-                    GuildId::new(guild_id),
-                    UserId::new(event.reporter_id as u64),
+                    GuildId::new(crate::config::CONFIG.guild_id),
+                    UserId::new(event.reporter_id),
                 )
                 .await
                 .unwrap();
             member
-                .add_role(&ctx.http, RoleId::new(abuse_role))
+                .add_role(
+                    &ctx.http,
+                    RoleId::new(crate::config::CONFIG.no_reports_role_id),
+                )
                 .await
                 .unwrap();
         }
     }
-    update_voting_message(ctx, data, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
 async fn handle_useless_button(

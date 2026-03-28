@@ -65,6 +65,7 @@ impl Database {
             .first::<i32>(&self.pool.get()?)?)
     }
 
+    #[allow(dead_code)]
     fn get_option_number_by_value(
         &self,
         voteid: i32,

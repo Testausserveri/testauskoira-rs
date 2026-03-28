@@ -8,6 +8,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane.url = "github:ipetkov/crane";
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -17,6 +22,7 @@
       systems,
       fenix,
       crane,
+      treefmt-nix,
       ...
     }:
     let
@@ -35,34 +41,60 @@
           craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
           rustFlags = "-C link-arg=-Wl,-rpath,${pkgs.libmysqlclient}/lib/mariadb";
+
+          src = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter =
+              path: type:
+              (craneLib.filterCargoSources path type)
+              || (builtins.baseNameOf path == "migrations" || builtins.match ".*/migrations/.*" path != null);
+          };
+
+          commonArgs = {
+            inherit src;
+            buildInputs = [ pkgs.libmysqlclient ];
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            RUSTFLAGS = rustFlags;
+          };
+
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+          treefmtEval = treefmt-nix.lib.evalModule pkgs {
+            projectRootFile = "flake.nix";
+            programs.nixfmt.enable = true;
+            programs.rustfmt = {
+              enable = true;
+              package = toolchain;
+            };
+          };
         in
-        { inherit pkgs toolchain craneLib rustFlags; }
+        {
+          inherit
+            pkgs
+            toolchain
+            craneLib
+            rustFlags
+            treefmtEval
+            commonArgs
+            cargoArtifacts
+            ;
+        }
       );
     in
     {
       packages = forEachSystem (
         system:
         let
-          inherit (perSystem.${system}) pkgs toolchain craneLib rustFlags;
+          inherit (perSystem.${system})
+            pkgs
+            toolchain
+            craneLib
+            commonArgs
+            cargoArtifacts
+            ;
         in
         rec {
-          default = craneLib.buildPackage {
-            buildInputs = [
-              pkgs.libmysqlclient
-            ];
-
-            nativeBuildInputs = [
-              pkgs.pkg-config
-            ];
-
-            RUSTFLAGS = rustFlags;
-
-            src = pkgs.lib.cleanSourceWith {
-              src = ./.;
-              filter = path: type:
-                (craneLib.filterCargoSources path type) || (builtins.baseNameOf path == "migrations" || builtins.match ".*/migrations/.*" path != null);
-            };
-          };
+          default = craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
 
           rustToolchain = toolchain;
 
@@ -91,6 +123,31 @@
 
             RUSTFLAGS = rustFlags;
           };
+        }
+      );
+
+      formatter = forEachSystem (system: perSystem.${system}.treefmtEval.config.build.wrapper);
+
+      checks = forEachSystem (
+        system:
+        let
+          inherit (perSystem.${system})
+            craneLib
+            commonArgs
+            cargoArtifacts
+            treefmtEval
+            ;
+        in
+        {
+          build = craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
+          clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- --deny warnings --allow non_local_definitions";
+            }
+          );
+          formatting = treefmtEval.config.build.check self;
         }
       );
     };

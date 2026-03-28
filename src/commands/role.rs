@@ -5,10 +5,7 @@ use crate::{Context, Error};
 /// Valitse itsellesi mieluisia rooleja
 #[poise::command(slash_command)]
 pub async fn role(ctx: Context<'_>) -> Result<(), Error> {
-    let guild_id: u64 = std::env::var("GUILD_ID")
-        .expect("NO GUILD_ID in .env")
-        .parse()
-        .unwrap();
+    let guild_id = crate::config::CONFIG.guild_id;
     let mut guild_roles = ctx
         .serenity_context()
         .http
@@ -48,10 +45,8 @@ pub async fn role(ctx: Context<'_>) -> Result<(), Error> {
         .map(|role| CreateSelectMenuOption::new(&role.name, role.id.get().to_string()))
         .collect();
 
-    let select_menu = CreateSelectMenu::new(
-        "give_role_menu",
-        CreateSelectMenuKind::String { options },
-    );
+    let select_menu =
+        CreateSelectMenu::new("give_role_menu", CreateSelectMenuKind::String { options });
 
     ctx.send(
         poise::CreateReply::default()
@@ -63,10 +58,7 @@ pub async fn role(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn handle_menu_button(
-    ctx: &serenity::Context,
-    interaction: ComponentInteraction,
-) {
+pub async fn handle_menu_button(ctx: &serenity::Context, interaction: ComponentInteraction) {
     let member = interaction.member.as_ref().unwrap().clone();
     let values = match &interaction.data.kind {
         ComponentInteractionDataKind::StringSelect { values } => values,
