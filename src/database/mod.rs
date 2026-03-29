@@ -8,7 +8,7 @@ use diesel::{
     mysql::MysqlConnection,
     r2d2::{ConnectionManager, Pool},
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -50,7 +50,8 @@ impl Database {
             .expect("Failed to create connection pool");
 
         let mut conn = pool.get().expect("Failed to get connection for migrations");
-        conn.run_pending_migrations(MIGRATIONS).expect("Failed to run database migrations");
+        conn.run_pending_migrations(MIGRATIONS)
+            .expect("Failed to run database migrations");
 
         Self { pool }
     }

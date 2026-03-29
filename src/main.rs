@@ -10,7 +10,10 @@ mod voting;
 extern crate tracing;
 
 use poise::serenity_prelude as serenity;
-use std::{collections::HashMap, sync::{Arc, LazyLock}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 use tokio::sync::Mutex;
 
 use config::CONFIG;

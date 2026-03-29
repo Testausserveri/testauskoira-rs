@@ -256,9 +256,7 @@ impl Database {
 
     pub async fn unsilence_user(&self, userid: u64) -> Result<usize, anyhow::Error> {
         use crate::schema::SilencedMembers::dsl::*;
-        Ok(
-            diesel::delete(SilencedMembers.filter(user_id.eq(userid)))
-                .execute(&mut self.pool.get()?)?,
-        )
+        Ok(diesel::delete(SilencedMembers.filter(user_id.eq(userid)))
+            .execute(&mut self.pool.get()?)?)
     }
 }
