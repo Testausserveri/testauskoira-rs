@@ -313,15 +313,7 @@ async fn main() {
 
                 // Setup schedulers
                 let http = ctx.http.clone();
-                let mut scheduler = clokwerk::AsyncScheduler::with_tz(chrono::Local);
-                events::setup_schedulers(&mut scheduler, http, db_for_scheduler);
-
-                tokio::spawn(async move {
-                    loop {
-                        scheduler.run_pending().await;
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    }
-                });
+                events::spawn_schedulers(http, db_for_scheduler);
 
                 Ok(data)
             })
