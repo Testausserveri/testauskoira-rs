@@ -431,14 +431,6 @@ async fn handle_silence_vote(
                 )
                 .await
                 .unwrap();
-            data.db.silence_user(member.user.id.get()).await.ok();
-            member
-                .add_role(
-                    &ctx.http,
-                    RoleId::new(crate::config::CONFIG.silenced_role_id),
-                )
-                .await
-                .ok();
             member
                 .disable_communication_until_datetime(
                     &ctx.http,
@@ -460,7 +452,7 @@ async fn handle_silence_vote(
                 .is_err()
             {
                 info!(
-                    "Unable to send \"Silenced notification\" to {}",
+                    "Unable to send \"Timeout notification\" to {}",
                     member.user.id.get()
                 );
             }

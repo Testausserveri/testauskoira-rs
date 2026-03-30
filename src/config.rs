@@ -23,10 +23,6 @@ pub struct Config {
     #[arg(long, env)]
     pub mod_channel_id: u64,
 
-    /// Role applied to silenced users
-    #[arg(long, env)]
-    pub silenced_role_id: u64,
-
     /// Role granted when a member passes membership screening
     #[arg(long, env)]
     pub member_role_id: u64,

@@ -157,21 +157,6 @@ pub struct NewAwardWinner {
     pub date: chrono::NaiveDate,
 }
 
-#[allow(dead_code)]
-#[derive(Queryable)]
-pub struct SilencedMember {
-    pub id: i32,
-    pub user_id: u64,
-}
-
-use crate::schema::SilencedMembers;
-
-#[derive(Insertable)]
-#[diesel(table_name = SilencedMembers)]
-pub struct NewSilencedMember {
-    pub user_id: u64,
-}
-
 #[derive(Queryable)]
 pub struct VoteEvent {
     pub id: i32,

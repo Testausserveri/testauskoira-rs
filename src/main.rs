@@ -79,17 +79,6 @@ async fn event_handler(
             event: _,
         } => {
             if let (Some(old_member), Some(new_member)) = (old_if_available, new) {
-                let silenced_role_id = serenity::RoleId::new(CONFIG.silenced_role_id);
-                let old_silence = old_member.roles.contains(&silenced_role_id);
-                let new_silence = new_member.roles.contains(&silenced_role_id);
-                if new_silence && !old_silence {
-                    info!("Silencing user: {}", &new_member.user);
-                    data.db.silence_user(new_member.user.id.get()).await.ok();
-                } else if old_silence && !new_silence {
-                    info!("un-silencing user: {}", &new_member.user);
-                    data.db.unsilence_user(new_member.user.id.get()).await.ok();
-                }
-
                 if old_member.pending && !new_member.pending {
                     if let Err(e) = new_member
                         .add_role(&ctx.http, serenity::RoleId::new(CONFIG.member_role_id))
@@ -102,15 +91,6 @@ async fn event_handler(
         }
         serenity::FullEvent::GuildMemberAddition { new_member } => {
             info!("{} joined", new_member.user);
-            if let Ok(true) = data.db.is_silenced(new_member.user.id.get()).await {
-                info!("Adding silenced role to user {}", new_member.user);
-                if let Err(e) = new_member
-                    .add_role(&ctx.http, serenity::RoleId::new(CONFIG.silenced_role_id))
-                    .await
-                {
-                    error!("Failed to add silence role to {}: {}", new_member.user, e);
-                }
-            }
         }
         serenity::FullEvent::InteractionCreate {
             interaction: serenity::Interaction::Component(component),
