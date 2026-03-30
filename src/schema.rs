@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-table! {
+diesel::table! {
     AwardWinners (id) {
         id -> Integer,
         user_id -> Unsigned<Bigint>,
@@ -7,7 +7,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     CouncilVotings (id) {
         id -> Integer,
         vote_message_id -> Unsigned<Bigint>,
@@ -28,7 +28,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     Giveaways (id) {
         id -> Bigint,
         message_id -> Unsigned<Bigint>,
@@ -41,7 +41,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     GiveawayWinners (id) {
         id -> Bigint,
         giveaway_id -> Bigint,
@@ -50,7 +50,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     messages_day_stat (id) {
         id -> Integer,
         date -> Nullable<Date>,
@@ -59,14 +59,7 @@ table! {
     }
 }
 
-table! {
-    SilencedMembers (id) {
-        id -> Integer,
-        user_id -> Unsigned<Bigint>,
-    }
-}
-
-table! {
+diesel::table! {
     SuspectMessageEdits (id) {
         id -> Integer,
         voting_message_id -> Unsigned<Bigint>,
@@ -76,7 +69,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     VoteEventOptions (id) {
         id -> Integer,
         vote_id -> Integer,
@@ -85,7 +78,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     VoteEvents (id) {
         id -> Integer,
         title -> Tinytext,
@@ -97,7 +90,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     Votes (id) {
         id -> Integer,
         vote_id -> Integer,
@@ -106,7 +99,7 @@ table! {
     }
 }
 
-table! {
+diesel::table! {
     VotingActions (id) {
         id -> Integer,
         vote_type -> Integer,
@@ -115,17 +108,16 @@ table! {
     }
 }
 
-joinable!(GiveawayWinners -> Giveaways (giveaway_id));
-joinable!(VoteEventOptions -> VoteEvents (vote_id));
-joinable!(Votes -> VoteEvents (vote_id));
+diesel::joinable!(GiveawayWinners -> Giveaways (giveaway_id));
+diesel::joinable!(VoteEventOptions -> VoteEvents (vote_id));
+diesel::joinable!(Votes -> VoteEvents (vote_id));
 
-allow_tables_to_appear_in_same_query!(
+diesel::allow_tables_to_appear_in_same_query!(
     AwardWinners,
     CouncilVotings,
     Giveaways,
     GiveawayWinners,
     messages_day_stat,
-    SilencedMembers,
     SuspectMessageEdits,
     VoteEventOptions,
     VoteEvents,

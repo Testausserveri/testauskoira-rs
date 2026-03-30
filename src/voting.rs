@@ -1,50 +1,31 @@
 // FIXME: un-unwrap();
 
-use serenity::{
-    builder::EditMessage,
-    model::{
-        id::UserId,
-        interactions::InteractionApplicationCommandCallbackDataFlags,
-        application::{
-            interaction::{
-                application_command::ApplicationCommandInteraction,
-                InteractionResponseType::{ChannelMessageWithSource, DeferredUpdateMessage},
-                message_component::MessageComponentInteraction,
-            },
-            component::ButtonStyle,
-        },
-        timestamp::Timestamp,
-    },
-    prelude::TypeMapKey,
-};
+use std::collections::HashSet;
+
+use poise::serenity_prelude::{self as serenity, *};
 
 use crate::{
-    env,
-    extensions::*,
+    Data, Error,
     models::{CouncilVoting, SuspectMessageEdit, VotingAction},
-    Arc, Channel, Context, Interaction, Message, MessageId, MessageUpdateEvent, Mutex, User,
 };
 
 pub struct PendingEdits {
-    edits: Vec<u64>,
-}
-
-impl TypeMapKey for PendingEdits {
-    type Value = Arc<Mutex<PendingEdits>>;
+    edits: HashSet<u64>,
 }
 
 impl PendingEdits {
     pub fn new() -> PendingEdits {
-        let edits = Vec::new();
-        Self { edits }
+        Self {
+            edits: HashSet::new(),
+        }
     }
 
     pub fn add(&mut self, message_id: u64) {
-        self.edits.push(message_id);
+        self.edits.insert(message_id);
     }
 
     pub fn remove(&mut self, message_id: u64) {
-        self.edits.retain(|x| *x != message_id);
+        self.edits.remove(&message_id);
     }
 
     pub fn contains(&self, message_id: u64) -> bool {
@@ -52,12 +33,11 @@ impl PendingEdits {
     }
 }
 
-async fn is_reported(ctx: &Context, message_id: u64) -> bool {
-    let db = ctx.get_db().await;
-    db.is_reported(message_id).await.unwrap_or(false)
+async fn is_reported(data: &Data, message_id: u64) -> bool {
+    data.db.is_reported(message_id).await.unwrap_or(false)
 }
 
-fn filter_votes(id: i32, actions: Vec<VotingAction>) -> String {
+fn filter_votes(id: i32, actions: &[VotingAction]) -> String {
     let mut actions = actions
         .iter()
         .filter(|x| x.vote_type == id)
@@ -70,242 +50,232 @@ fn filter_votes(id: i32, actions: Vec<VotingAction>) -> String {
 }
 
 fn generate_moderation_message(
-    message: &mut EditMessage,
     voting: CouncilVoting,
     edits: Vec<SuspectMessageEdit>,
     votes: Vec<VotingAction>,
     suspect_tag: String,
-) {
-    let guild_id = env::var("GUILD_ID").expect("NO GUILD_ID in .env");
+) -> EditMessage {
     let message_link = format!(
         "https://discord.com/channels/{}/{}/{}",
-        guild_id, voting.suspect_message_channel_id, voting.suspect_message_id
+        crate::config::CONFIG.guild_id,
+        voting.suspect_message_channel_id,
+        voting.suspect_message_id
     );
-    let delete_voters = filter_votes(0, votes.clone());
-    let silence_voters = filter_votes(1, votes.clone());
-    let block_reporter_voters = filter_votes(2, votes);
-    message.embed(|e| {
-        e.color(serenity::utils::Color::RED);
-        e.title("Viestistä on tehty ilmoitus!");
-        e.field("Arvojäseniä paikalla", voting.moderators_online, true);
-        e.field(
+    let delete_voters = filter_votes(0, &votes);
+    let silence_voters = filter_votes(1, &votes);
+    let block_reporter_voters = filter_votes(2, &votes);
+
+    let main_embed = CreateEmbed::new()
+        .colour(Colour::RED)
+        .title("Viestistä on tehty ilmoitus!")
+        .field(
+            "Arvojäseniä paikalla",
+            format!("{}", voting.moderators_online),
+            true,
+        )
+        .field(
             "Viestin kanava",
             format!("<#{}>", voting.suspect_message_channel_id),
             true,
-        );
-        e.field(
+        )
+        .field(
             "Viestin lähettänyt",
             format!("<@{}>, {}", voting.suspect_id, suspect_tag),
             true,
-        );
-        e.field(
+        )
+        .field(
             "Ilmoituksen tehnyt",
             format!("<@{}>", voting.reporter_id),
             true,
-        );
-        e.description(format!(
+        )
+        .description(format!(
             "Viestin sisältö:\n```\n{}```",
             voting.suspect_message_content
-        ));
-        e.field(
+        ))
+        .field(
             format!(
                 "Poistamisen puolesta {}/{}",
                 voting.delete_votes, voting.delete_votes_required
             ),
-            delete_voters,
+            &delete_voters,
             true,
-        );
-        e.field(
+        )
+        .field(
             format!(
                 "Hiljennyksen puolesta {}/{}",
                 voting.silence_votes, voting.silence_votes_required
             ),
-            silence_voters,
+            &silence_voters,
             true,
-        );
-        e.field(
+        )
+        .field(
             format!(
                 "Ilmoittajan estämisen puolesta {}/{}",
                 voting.block_reporter_votes, voting.block_reporter_votes_required
             ),
-            block_reporter_voters,
+            &block_reporter_voters,
             true,
-        );
-        e.footer(|f| {
-            f.text(format!(
-                "Viesti lähetetty: {}",
-                voting.suspect_message_send_time
-            ))
-        })
-    });
+        )
+        .footer(CreateEmbedFooter::new(format!(
+            "Viesti lähetetty: {}",
+            voting.suspect_message_send_time
+        )));
+
+    let mut embeds = vec![main_embed];
     for edit in &edits {
         if edit.new_content.is_empty() {
-            message.add_embed(|e| {
-                e.title("Viesti on poistettu");
-                e.footer(|f| f.text(format!("Poiston ajankohta: {}", edit.edit_time)))
-            });
+            embeds.push(CreateEmbed::new().title("Viesti on poistettu").footer(
+                CreateEmbedFooter::new(format!("Poiston ajankohta: {}", edit.edit_time)),
+            ));
             break;
         }
-        message.add_embed(|e| {
-            e.title("Viestiä on muokattu");
-            e.description(format!("Uusi sisältö:\n```\n{}```", edit.new_content));
-            e.footer(|f| f.text(format!("Muokkausajankohta: {}", edit.edit_time)))
-        });
+        embeds.push(
+            CreateEmbed::new()
+                .title("Viestiä on muokattu")
+                .description(format!("Uusi sisältö:\n```\n{}```", edit.new_content))
+                .footer(CreateEmbedFooter::new(format!(
+                    "Muokkausajankohta: {}",
+                    edit.edit_time
+                ))),
+        );
     }
-    message.components(|c| {
-        c.create_action_row(|r| {
-            r.create_button(|b| {
-                b.label("Poista viesti");
-                b.style(ButtonStyle::Secondary);
-                if voting.delete_votes == voting.delete_votes_required
-                    || (!edits.is_empty() && edits.last().unwrap().new_content.is_empty())
-                {
-                    b.disabled(true);
-                }
-                b.custom_id("delete_button")
-            });
-            r.create_button(|b| {
-                b.label("Hiljennä jäsen");
-                b.style(ButtonStyle::Danger);
-                if voting.silence_votes == voting.silence_votes_required {
-                    b.disabled(true);
-                }
-                b.custom_id("ban_button")
-            });
-            if !message_link.is_empty() {
-                r.create_button(|b| {
-                    b.label("Näytä viesti");
-                    b.style(ButtonStyle::Link);
-                    b.url(message_link)
-                });
-            }
-            r.create_button(|b| {
-                b.label("Estä ilmoittaja");
-                b.style(ButtonStyle::Danger);
-                if voting.block_reporter_votes == voting.block_reporter_votes_required {
-                    b.disabled(true);
-                }
-                b.custom_id("abuse_button")
-            })
-        });
-        c.create_action_row(|r| {
-            r.create_button(|b| {
-                b.label(format!("{} klikkausta tuhlattu", voting.useless_clicks));
-                b.style(ButtonStyle::Success);
-                b.custom_id("useless_button")
-            })
-        })
-    });
+
+    let mut delete_btn = CreateButton::new("delete_button")
+        .label("Poista viesti")
+        .style(ButtonStyle::Secondary);
+    if voting.delete_votes == voting.delete_votes_required
+        || (!edits.is_empty() && edits.last().unwrap().new_content.is_empty())
+    {
+        delete_btn = delete_btn.disabled(true);
+    }
+
+    let mut silence_btn = CreateButton::new("ban_button")
+        .label("Hiljennä jäsen")
+        .style(ButtonStyle::Danger);
+    if voting.silence_votes == voting.silence_votes_required {
+        silence_btn = silence_btn.disabled(true);
+    }
+
+    let link_btn = CreateButton::new_link(message_link).label("Näytä viesti");
+
+    let mut abuse_btn = CreateButton::new("abuse_button")
+        .label("Estä ilmoittaja")
+        .style(ButtonStyle::Danger);
+    if voting.block_reporter_votes == voting.block_reporter_votes_required {
+        abuse_btn = abuse_btn.disabled(true);
+    }
+
+    let useless_btn = CreateButton::new("useless_button")
+        .label(format!("{} klikkausta tuhlattu", voting.useless_clicks))
+        .style(ButtonStyle::Success);
+
+    let components = vec![
+        CreateActionRow::Buttons(vec![delete_btn, silence_btn, link_btn, abuse_btn]),
+        CreateActionRow::Buttons(vec![useless_btn]),
+    ];
+
+    EditMessage::new().embeds(embeds).components(components)
 }
 
-async fn update_voting_message(ctx: &Context, voting_message_id: u64) {
-    let moderation_channel_id: u64 = env::var("MOD_CHANNEL_ID")
-        .expect("No MOD_CHANNEL_ID in .env")
-        .parse()
-        .expect("Invalid MOD_CHANNEL_ID provided");
-    let db = ctx.get_db().await;
-    let event = db.get_voting_event(voting_message_id).await.unwrap();
-    let votes = db.get_voting_event_votes(voting_message_id).await.unwrap();
-    let edits = db.get_voting_event_edits(voting_message_id).await.unwrap();
-    let mut message = ctx
-        .http
-        .get_message(moderation_channel_id, voting_message_id)
+async fn update_voting_message(ctx: &serenity::Context, data: &Data, voting_message_id: u64) {
+    let moderation_channel_id = crate::config::CONFIG.mod_channel_id;
+    let event = data.db.get_voting_event(voting_message_id).await.unwrap();
+    let votes = data
+        .db
+        .get_voting_event_votes(voting_message_id)
         .await
         .unwrap();
-    let suspect_tag = if let Ok(user) = UserId(event.suspect_id).to_user(&ctx.http).await {
-        user.tag()
+    let edits = data
+        .db
+        .get_voting_event_edits(voting_message_id)
+        .await
+        .unwrap();
+    let mut message = ctx
+        .http
+        .get_message(
+            ChannelId::new(moderation_channel_id),
+            MessageId::new(voting_message_id),
+        )
+        .await
+        .unwrap();
+    let suspect_tag = if let Ok(user) = UserId::new(event.suspect_id).to_user(&ctx.http).await {
+        user.name.clone()
     } else {
         String::from("[Poistettu käyttäjä]")
     };
-    message
-        .edit(&ctx.http, |m| {
-            generate_moderation_message(m, event, edits, votes, suspect_tag);
-            m
-        })
-        .await
-        .unwrap()
+    let edit_msg = generate_moderation_message(event, edits, votes, suspect_tag);
+    message.edit(&ctx.http, edit_msg).await.unwrap()
 }
 
-/// This handles a message_changed event an checks for
-/// reported messages that are edited. It then updates the message on the
-/// moderation channel with the message's new content and the time of the edit.
-///
-/// (Due to discord limitations the maximum number of logged edits is 9 after which they will no
-/// longer be logged)
-// NOTE: This could become a problem in which case a workaround can be implemented
-pub async fn handle_edit(ctx: &Context, event: &MessageUpdateEvent) {
-    if !is_reported(ctx, event.id.0).await {
+/// This handles a message_changed event and checks for
+/// reported messages that are edited.
+pub async fn handle_edit(ctx: &serenity::Context, data: &Data, event: &MessageUpdateEvent) {
+    if !is_reported(data, event.id.get()).await {
         return;
     }
-    let db = ctx.get_db().await;
-    let voting_event = db.get_voting_event_for_message(event.id.0).await.unwrap();
-    db.add_edit_event(event.to_owned(), voting_event.vote_message_id)
+    let voting_event = data
+        .db
+        .get_voting_event_for_message(event.id.get())
         .await
         .unwrap();
-    update_voting_message(ctx, voting_event.vote_message_id as u64).await;
+    data.db
+        .add_edit_event(event.to_owned(), voting_event.vote_message_id)
+        .await
+        .unwrap();
+    update_voting_message(ctx, data, voting_event.vote_message_id).await;
 }
 
 /// This handles the deletion of a message
-/// First it check whether the message is reported
-/// After that it proceeds accordingly.
-/// If a reported message is deleted the deletion time will be logged into the embed-chain
-pub async fn handle_delete(ctx: &Context, message_id: MessageId) {
-    if !is_reported(ctx, message_id.0).await {
+pub async fn handle_delete(ctx: &serenity::Context, data: &Data, message_id: MessageId) {
+    if !is_reported(data, message_id.get()).await {
         return;
     }
-    let db = ctx.get_db().await;
-    let voting_event = db.get_voting_event_for_message(message_id.0).await.unwrap();
-    db.message_deleted(
-        chrono::Local::now().naive_local(),
-        voting_event.vote_message_id,
-    )
-    .await
-    .unwrap();
-    update_voting_message(ctx, voting_event.vote_message_id as u64).await;
+    let voting_event = data
+        .db
+        .get_voting_event_for_message(message_id.get())
+        .await
+        .unwrap();
+    data.db
+        .message_deleted(
+            chrono::Local::now().naive_local(),
+            voting_event.vote_message_id,
+        )
+        .await
+        .unwrap();
+    update_voting_message(ctx, data, voting_event.vote_message_id).await;
 }
 
-/// Handles an event where a message was reported using the "⛔ Ilmianna viesti" message command
-/// This sends an embed to the moderation channel, containing some information about the message
-/// and the reported
-pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInteraction) {
-    let no_reports_role_id: u64 = env::var("NO_REPORTS_ROLE_ID")
-        .expect("Expected NO_REPORTS_ROLE_ID in .env")
-        .parse()
-        .expect("Invalid NO_REPORTS_ROLE_ID provided");
+/// Handles an event where a message was reported using the context menu command
+#[poise::command(context_menu_command = "\u{26d4} Ilmianna viesti")]
+pub async fn report_message(ctx: crate::Context<'_>, msg: Message) -> Result<(), Error> {
+    let data = ctx.data();
+    let serenity_ctx = ctx.serenity_context();
 
-    let guild_id: u64 = env::var("GUILD_ID")
-        .expect("Expected GUILD_ID in .env")
-        .parse()
-        .expect("Invalid GUILD_ID provided");
+    let no_reports_role_id = crate::config::CONFIG.no_reports_role_id;
+    let guild_id = crate::config::CONFIG.guild_id;
+    let moderation_channel_id = crate::config::CONFIG.mod_channel_id;
 
-    let moderation_channel_id = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid MOD_CHANNEL_ID provided");
-
-    if interaction
-        .user
-        .has_role(&ctx.http, guild_id, no_reports_role_id)
+    if ctx
+        .author()
+        .has_role(
+            &serenity_ctx.http,
+            GuildId::new(guild_id),
+            RoleId::new(no_reports_role_id),
+        )
         .await
         .unwrap()
     {
-        info!("Skipping blacklisted reporter {}", interaction.user.id.0);
-        interaction
-            .create_interaction_response(&ctx.http, |r| {
-                r.interaction_response_data(|d| {
-                    d.flags(
-                        InteractionApplicationCommandCallbackDataFlags::EPHEMERAL
-                        );
-                    d.content("Sinut on hyllytetty ilmoitus-ominaisuuden väärinkäytöstä :rage:! Ilmoitustasi ei lähetetty.")
-                });
-                r.kind(ChannelMessageWithSource)
-            })
-        .await
-        .unwrap();
-        return;
+        info!("Skipping blacklisted reporter {}", ctx.author().id.get());
+        ctx.send(
+            poise::CreateReply::default()
+                .ephemeral(true)
+                .content("Sinut on hyllytetty ilmoitus-ominaisuuden väärinkäytöstä :rage:! Ilmoitustasi ei lähetetty."),
+        )
+        .await?;
+        return Ok(());
     }
 
-    let message = if is_moderator(ctx, &interaction.user).await {
+    let response_message = if is_moderator(serenity_ctx, ctx.author()).await {
         format!(
             "Viesti on ilmiannettu arvojäsenten neuvostolle, <#{}>",
             moderation_channel_id
@@ -314,155 +284,153 @@ pub async fn handle_report(ctx: &Context, interaction: ApplicationCommandInterac
         "Viesti on ilmiannettu arvojäsenten neuvostolle".to_string()
     };
 
-    interaction
-        .create_interaction_response(&ctx.http, |r| {
-            r.interaction_response_data(|d| {
-                d.flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL);
-                d.content(message)
-            });
-            r.kind(ChannelMessageWithSource)
-        })
-        .await
-        .unwrap();
-    let suspect_message = interaction.data.resolved.messages.values().next().unwrap();
-    if is_reported(ctx, suspect_message.id.0).await {
+    ctx.send(
+        poise::CreateReply::default()
+            .ephemeral(true)
+            .content(response_message),
+    )
+    .await?;
+
+    if is_reported(data, msg.id.get()).await {
         info!(
             "The message {} is already reported! Skipping...",
-            suspect_message.id.0
+            msg.id.get()
         );
-        return;
+        return Ok(());
     }
-    let mods_online = get_online_mod_count(ctx).await;
-    let moderation_channel = ctx.http.get_channel(moderation_channel_id).await.unwrap();
-    let voting_message = moderation_channel
-        .id()
-        .send_message(&ctx.http, |m| {
-            m.embed(|e| e.title("Viestistä on tehty ilmoitus!"))
-        })
+    let mods_online = get_online_mod_count(serenity_ctx).await;
+    let moderation_channel = serenity_ctx
+        .http
+        .get_channel(ChannelId::new(moderation_channel_id))
         .await
         .unwrap();
-    let db = ctx.get_db().await;
-    db.new_reported_message(
-        voting_message.id.0,
-        suspect_message.to_owned(),
-        interaction.user.id.0,
-        mods_online as i32,
-    )
-    .await
-    .unwrap();
-    update_voting_message(ctx, voting_message.id.0).await;
+    let voting_message = moderation_channel
+        .id()
+        .send_message(
+            &serenity_ctx.http,
+            CreateMessage::new().embed(CreateEmbed::new().title("Viestistä on tehty ilmoitus!")),
+        )
+        .await
+        .unwrap();
+    data.db
+        .new_reported_message(
+            voting_message.id.get(),
+            msg,
+            ctx.author().id.get(),
+            mods_online as i32,
+        )
+        .await
+        .unwrap();
+    update_voting_message(serenity_ctx, data, voting_message.id.get()).await;
+    Ok(())
 }
 
 /// Get the amount of online members who have access to the moderation channel.
-/// This is done by comparing the members of the channel to the member that are currently present on
-/// the server.
-async fn get_online_mod_count(ctx: &Context) -> usize {
-    let channelid = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod role id");
-    if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
-        let precenses = ctx.cache.guild(channel.guild_id).unwrap().presences;
-        let mut members = channel.members(&ctx.cache).await.unwrap();
-        members.retain(|m| precenses.contains_key(&m.user.id) && !m.user.bot);
+async fn get_online_mod_count(ctx: &serenity::Context) -> usize {
+    if let Channel::Guild(channel) = ctx
+        .http
+        .get_channel(ChannelId::new(crate::config::CONFIG.mod_channel_id))
+        .await
+        .unwrap()
+    {
+        let presences = ctx.cache.guild(channel.guild_id).unwrap().presences.clone();
+        let mut members = channel.members(&ctx.cache).unwrap();
+        members.retain(|m| presences.contains_key(&m.user.id) && !m.user.bot);
         return members.len();
     };
     unreachable!()
 }
 
-/// Check if the given user is a moderator or not, based on their access to the moderation channel
-async fn is_moderator(ctx: &Context, user: &User) -> bool {
-    let channelid = env::var("MOD_CHANNEL_ID")
-        .expect("MOD_CHANNEL_ID id expected")
-        .parse::<u64>()
-        .expect("Invalid mod role id");
-    if let Channel::Guild(channel) = ctx.http.get_channel(channelid).await.unwrap() {
-        return channel
-            .permissions_for_user(&ctx.cache, user)
-            .unwrap()
-            .read_message_history();
+/// Check if the given user is a moderator or not
+async fn is_moderator(ctx: &serenity::Context, user: &User) -> bool {
+    if let Channel::Guild(channel) = ctx
+        .http
+        .get_channel(ChannelId::new(crate::config::CONFIG.mod_channel_id))
+        .await
+        .unwrap()
+    {
+        if let Ok(member) = ctx.http.get_member(channel.guild_id, user.id).await {
+            if let Some(guild) = ctx.cache.guild(channel.guild_id) {
+                return guild
+                    .user_permissions_in(&channel, &member)
+                    .read_message_history();
+            }
+        }
     }
-    unreachable!();
+    false
 }
 
-/// The function to handle a vote-addition event for the "delete_button"
-/// This function adds the vote then checks whether the goal is reached
-/// and then acts accordingly, either by deleting the message and then updating
-/// the announcement on the moderation channel or just by updating the announcement
-async fn handle_delete_vote(ctx: &Context, voter: User, message: &mut Message) {
-    let db = ctx.get_db().await;
-    let event = db.get_voting_event(message.id.0).await.unwrap();
+/// Handle the "delete_button" vote
+async fn handle_delete_vote(ctx: &serenity::Context, data: &Data, voter: &User, message: &Message) {
+    let event = data.db.get_voting_event(message.id.get()).await.unwrap();
     if event.delete_votes == event.delete_votes_required {
         return;
     }
-    if db
-        .add_vote(event.vote_message_id, voter.id.0, 0)
+    if data
+        .db
+        .add_vote(event.vote_message_id, voter.id.get(), 0)
         .await
         .unwrap()
         == 0
     {
-        db.remove_vote(event.vote_message_id, voter.id.0, 0)
+        data.db
+            .remove_vote(event.vote_message_id, voter.id.get(), 0)
             .await
             .unwrap();
     } else {
-        let event = db.get_voting_event(message.id.0).await.unwrap();
+        let event = data.db.get_voting_event(message.id.get()).await.unwrap();
         if event.delete_votes == event.delete_votes_required {
-            let message = ctx
+            let suspect_msg = ctx
                 .http
                 .get_message(
-                    event.suspect_message_channel_id as u64,
-                    event.suspect_message_id as u64,
+                    ChannelId::new(event.suspect_message_channel_id),
+                    MessageId::new(event.suspect_message_id),
                 )
                 .await
                 .unwrap();
-            message.delete(&ctx.http).await.unwrap();
-            db.message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
+            suspect_msg.delete(&ctx.http).await.unwrap();
+            data.db
+                .message_deleted(chrono::Local::now().naive_local(), event.vote_message_id)
                 .await
                 .unwrap();
         }
     }
-    update_voting_message(ctx, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
-/// The function to handle a vote-addition event for the "ban_button"
-/// This function adds the vote then checks whether the goal is reached
-/// and then acts accordingly, either by banning the member and then updating
-/// the announcement on the moderation channel or just by updating the announcement
-//
-// NOTE: The ban actually only applies the "silenced" role upon the user
-async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) {
-    let db = ctx.get_db().await;
-    let event = db.get_voting_event(message.id.0).await.unwrap();
+/// Handle the "ban_button" (silence) vote
+async fn handle_silence_vote(
+    ctx: &serenity::Context,
+    data: &Data,
+    voter: &User,
+    message: &Message,
+) {
+    let event = data.db.get_voting_event(message.id.get()).await.unwrap();
     if event.silence_votes == event.silence_votes_required {
         return;
     }
-    if db
-        .add_vote(event.vote_message_id, voter.id.0, 1)
+    if data
+        .db
+        .add_vote(event.vote_message_id, voter.id.get(), 1)
         .await
         .unwrap()
         == 0
     {
-        db.remove_vote(event.vote_message_id, voter.id.0, 1)
+        data.db
+            .remove_vote(event.vote_message_id, voter.id.get(), 1)
             .await
             .unwrap();
     } else {
-        let event = db.get_voting_event(message.id.0).await.unwrap();
+        let event = data.db.get_voting_event(message.id.get()).await.unwrap();
         if event.silence_votes == event.silence_votes_required {
-            let guild_id: u64 = env::var("GUILD_ID")
-                .expect("Expected GUILD_ID in .env")
-                .parse()
-                .expect("Invalid GUILD_ID provided");
-            let silence_role: u64 = env::var("SILENCED_ROLE_ID")
-                .expect("Expected SILENCED_ROLE_ID in .env")
-                .parse()
-                .expect("Invalid SILENCED_ROLE_ID provided");
             let mut member = ctx
                 .http
-                .get_member(guild_id, event.suspect_id as u64)
+                .get_member(
+                    GuildId::new(crate::config::CONFIG.guild_id),
+                    UserId::new(event.suspect_id),
+                )
                 .await
                 .unwrap();
-            db.silence_user(member.user.id.0).await.ok(); // Might fail if the member is already silenced
-            member.add_role(&ctx.http, silence_role).await.ok();
             member
                 .disable_communication_until_datetime(
                     &ctx.http,
@@ -470,102 +438,130 @@ async fn handle_silence_vote(ctx: &Context, voter: User, message: &mut Message) 
                 )
                 .await
                 .unwrap();
-            let rules_channel_id =
-                env::var("RULES_CHANNEL_ID").expect("RULES_CHANNEL_ID is not set");
-            if (member.user.dm(&ctx.http, |m| {
-                m.content(format!("Sinut on hiljennetty huonon käyttäytymisen vuoksi arvojäsenten toimesta.\n\nMikäli haluat keskusteluoikeutesi takaisin, voit olla yhteydessä Mastermindeihin joko yksityisviestitse tai sähköpostitse masterminds@testausserveri.fi. Tarkistathan sääntömme kanavalta <#{}>.", rules_channel_id))
-            }).await).is_err() {
-                info!("Unable to send \"Silenced notification\" to {}", member.user.id.0);
+            let rules_channel_id = crate::config::CONFIG.rules_channel_id;
+            if member
+                .user
+                .dm(
+                    &ctx.http,
+                    CreateMessage::new().content(format!(
+                        "Sinut on hiljennetty huonon käyttäytymisen vuoksi arvojäsenten toimesta.\n\nMikäli haluat keskusteluoikeutesi takaisin, voit olla yhteydessä Mastermindeihin joko yksityisviestitse tai sähköpostitse masterminds@testausserveri.fi. Tarkistathan sääntömme kanavalta <#{}>.",
+                        rules_channel_id
+                    )),
+                )
+                .await
+                .is_err()
+            {
+                info!(
+                    "Unable to send \"Timeout notification\" to {}",
+                    member.user.id.get()
+                );
             }
         }
     }
-    update_voting_message(ctx, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
-/// This function handles the press off the "abuse_button"
-/// If the vote-goal is reached, the user will be given a
-/// role that prevents them from further abusing the reporting feature
-async fn handle_abuse_vote(ctx: &Context, voter: User, message: &mut Message) {
-    let db = ctx.get_db().await;
-    let event = db.get_voting_event(message.id.0).await.unwrap();
+/// Handle the "abuse_button" vote
+async fn handle_abuse_vote(ctx: &serenity::Context, data: &Data, voter: &User, message: &Message) {
+    let event = data.db.get_voting_event(message.id.get()).await.unwrap();
     if event.block_reporter_votes == event.block_reporter_votes_required {
         return;
     }
-    if db
-        .add_vote(event.vote_message_id, voter.id.0, 2)
+    if data
+        .db
+        .add_vote(event.vote_message_id, voter.id.get(), 2)
         .await
         .unwrap()
         == 0
     {
-        db.remove_vote(event.vote_message_id, voter.id.0, 2)
+        data.db
+            .remove_vote(event.vote_message_id, voter.id.get(), 2)
             .await
             .unwrap();
     } else {
-        let event = db.get_voting_event(message.id.0).await.unwrap();
+        let event = data.db.get_voting_event(message.id.get()).await.unwrap();
         if event.block_reporter_votes == event.block_reporter_votes_required {
-            let guild_id: u64 = env::var("GUILD_ID")
-                .expect("Expected GUILD_ID in .env")
-                .parse()
-                .expect("Invalid GUILD_ID provided");
-            let abuse_role: u64 = env::var("NO_REPORTS_ROLE_ID")
-                .expect("Expected NO_REPORTS_ROLE_ID in .env")
-                .parse()
-                .expect("Invalid NO_REPORTS_ROLE_ID provided");
-            let mut member = ctx
+            let member = ctx
                 .http
-                .get_member(guild_id, event.reporter_id as u64)
+                .get_member(
+                    GuildId::new(crate::config::CONFIG.guild_id),
+                    UserId::new(event.reporter_id),
+                )
                 .await
                 .unwrap();
-            member.add_role(&ctx.http, abuse_role).await.unwrap();
+            member
+                .add_role(
+                    &ctx.http,
+                    RoleId::new(crate::config::CONFIG.no_reports_role_id),
+                )
+                .await
+                .unwrap();
         }
     }
-    update_voting_message(ctx, event.vote_message_id as u64).await;
+    update_voting_message(ctx, data, event.vote_message_id).await;
 }
 
-async fn handle_useless_button(ctx: &Context, component: &mut MessageComponentInteraction) {
-    let db = ctx.get_db().await;
-    let pending_edits = ctx.get_pending_edits().await;
-    db.add_useless_click(component.message.id.0).await.unwrap();
-    component
-        .create_interaction_response(&ctx.http, |r| r.kind(DeferredUpdateMessage))
+async fn handle_useless_button(
+    ctx: &serenity::Context,
+    data: &Data,
+    component: &ComponentInteraction,
+) {
+    data.db
+        .add_useless_click(component.message.id.get())
         .await
         .unwrap();
-    if !pending_edits.lock().await.contains(component.message.id.0) {
-        pending_edits.lock().await.add(component.message.id.0);
-        update_voting_message(ctx, component.message.id.0).await;
-        pending_edits.lock().await.remove(component.message.id.0);
+    component
+        .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
+        .await
+        .unwrap();
+    let should_update = {
+        let mut pending = data.pending_edits.lock().await;
+        if !pending.contains(component.message.id.get()) {
+            pending.add(component.message.id.get());
+            true
+        } else {
+            false
+        }
+    };
+    if should_update {
+        update_voting_message(ctx, data, component.message.id.get()).await;
+        data.pending_edits
+            .lock()
+            .await
+            .remove(component.message.id.get());
     }
 }
 
-/// This function handles the vote-interactions and the report interaction and
-/// calls the appropriate functions for them (logging stuff in the logs)
-pub async fn handle_vote_interaction(ctx: &Context, interaction: Interaction) {
-    if let Interaction::MessageComponent(mut component) = interaction {
-        match component.data.custom_id.as_str() {
-            "delete_button" => {
-                info!("Delete vote by {}", component.user.tag());
-                handle_delete_vote(ctx, component.user.clone(), &mut component.message).await;
-            }
-            "ban_button" => {
-                info!("Ban vote by {}", component.user.tag());
-                handle_silence_vote(ctx, component.user.clone(), &mut component.message).await;
-            }
-            "abuse_button" => {
-                info!("Abuse vote by {}", component.user.tag());
-                handle_abuse_vote(ctx, component.user.clone(), &mut component.message).await;
-            }
-            "useless_button" => {
-                handle_useless_button(ctx, &mut component).await;
-                return;
-            }
-            _ => {
-                debug!("Unknown interaction: {}", component.data.custom_id);
-                return;
-            }
+/// This function handles the vote-interactions and the report interaction
+pub async fn handle_vote_interaction(
+    ctx: &serenity::Context,
+    data: &Data,
+    component: ComponentInteraction,
+) {
+    match component.data.custom_id.as_str() {
+        "delete_button" => {
+            info!("Delete vote by {}", component.user.name);
+            handle_delete_vote(ctx, data, &component.user, &component.message).await;
         }
-        component
-            .create_interaction_response(&ctx.http, |r| r.kind(DeferredUpdateMessage))
-            .await
-            .unwrap();
+        "ban_button" => {
+            info!("Ban vote by {}", component.user.name);
+            handle_silence_vote(ctx, data, &component.user, &component.message).await;
+        }
+        "abuse_button" => {
+            info!("Abuse vote by {}", component.user.name);
+            handle_abuse_vote(ctx, data, &component.user, &component.message).await;
+        }
+        "useless_button" => {
+            handle_useless_button(ctx, data, &component).await;
+            return;
+        }
+        _ => {
+            debug!("Unknown interaction: {}", component.data.custom_id);
+            return;
+        }
     }
+    component
+        .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
+        .await
+        .unwrap();
 }

@@ -1,61 +1,38 @@
-use serenity::{
-    model::{
-        interactions::application_command::ApplicationCommandInteractionDataOptionValue,
-        prelude::application_command::ApplicationCommandInteraction,
-    },
-    prelude::Context,
-};
+use poise::serenity_prelude as serenity;
 
-pub async fn github(ctx: &Context, interaction: ApplicationCommandInteraction) {
-    interaction
-        .create_interaction_response(&ctx.http, |r| {
-            r.interaction_response_data(|d| {
-                d.content("Linkki github organisaatioon:\n<https://testausserveri.fi/github>")
-            })
-        })
-        .await
-        .unwrap();
+use crate::{Context, Error};
+
+/// Saa kutsu Testausserverin GitHub-organisaatioon
+#[poise::command(slash_command)]
+pub async fn github(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.say("Linkki github organisaatioon:\n<https://testausserveri.fi/github>")
+        .await?;
+    Ok(())
 }
 
-pub async fn liity(ctx: &Context, interaction: ApplicationCommandInteraction) {
-    interaction
-        .create_interaction_response(&ctx.http, |r| {
-            r.interaction_response_data(|d| {
-                d.content("https://testausserveri.fi/link/jasenhakemus")
-            })
-        })
-        .await
-        .unwrap();
+/// Täytä jäsenhakemus liittyäksesi Testausserveri ry:n jäseneksi
+#[poise::command(slash_command)]
+pub async fn liity(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.say("https://testausserveri.fi/link/jasenhakemus")
+        .await?;
+    Ok(())
 }
 
-pub async fn avatar(ctx: &Context, interaction: ApplicationCommandInteraction) {
-    let options = interaction.data.options.clone();
-    for option in options {
-        if let Some(ApplicationCommandInteractionDataOptionValue::User(u, pm)) = option.resolved {
-            if let Some(m) = pm {
-                if let Some(gid) = m.guild_id {
-                    if let Ok(u) = ctx.http.get_member(gid.0, u.id.0).await {
-                        return interaction
-                            .create_interaction_response(&ctx.http, |r| {
-                                r.interaction_response_data(|d| d.content(u.face()))
-                            })
-                            .await
-                            .unwrap();
-                    }
-                }
-            }
-            return interaction
-                .create_interaction_response(&ctx.http, |r| {
-                    r.interaction_response_data(|d| d.content(u.face()))
-                })
-                .await
-                .unwrap();
+/// Get a users avatar
+#[poise::command(slash_command)]
+pub async fn avatar(
+    ctx: Context<'_>,
+    #[description = "The user whose avatar is requested"] user: serenity::User,
+) -> Result<(), Error> {
+    let face = if let Some(guild_id) = ctx.guild_id() {
+        if let Ok(member) = guild_id.member(ctx, user.id).await {
+            member.face()
+        } else {
+            user.face()
         }
-    }
-    interaction
-        .create_interaction_response(&ctx.http, |r| {
-            r.interaction_response_data(|d| d.content("Getting users avatar failed"))
-        })
-        .await
-        .unwrap();
+    } else {
+        user.face()
+    };
+    ctx.say(face).await?;
+    Ok(())
 }

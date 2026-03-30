@@ -1,0 +1,13 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    environment:
+      MARIADB_DATABASE: testauskoira
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
+
+volumes:
+  mariadb_data:

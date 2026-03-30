@@ -1,23 +1,20 @@
-use serenity::prelude::TypeMapKey;
 pub mod giveaway;
 pub mod message_logging;
 pub mod vote;
 pub mod voting;
 
-use std::sync::Arc;
-
 use diesel::{
+    Connection, RunQueryDsl,
     mysql::MysqlConnection,
     r2d2::{ConnectionManager, Pool},
 };
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[derive(Clone)]
 pub struct Database {
     pool: Pool<ConnectionManager<MysqlConnection>>,
-}
-
-impl TypeMapKey for Database {
-    type Value = Arc<Database>;
 }
 
 impl AsRef<Database> for Database {
@@ -28,12 +25,34 @@ impl AsRef<Database> for Database {
 
 impl Database {
     pub async fn new() -> Self {
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let database_url = &crate::config::CONFIG.database_url;
 
-        let manager = ConnectionManager::<MysqlConnection>::new(&database_url);
+        // Auto-create the database so fresh deployments don't require manual provisioning
+        let db_name = database_url
+            .split('?')
+            .next()
+            .unwrap()
+            .rsplit('/')
+            .next()
+            .expect("DATABASE_URL must end with /database_name");
+        let server_url = &database_url[..database_url.len() - db_name.len() - 1];
+        {
+            let mut conn =
+                MysqlConnection::establish(server_url).expect("Failed to connect to MySQL server");
+            diesel::sql_query(format!("CREATE DATABASE IF NOT EXISTS `{db_name}`"))
+                .execute(&mut conn)
+                .expect("Failed to create database");
+        }
+
+        let manager = ConnectionManager::<MysqlConnection>::new(database_url);
         let pool = Pool::builder()
             .build(manager)
             .expect("Failed to create connection pool");
+
+        let mut conn = pool.get().expect("Failed to get connection for migrations");
+        conn.run_pending_migrations(MIGRATIONS)
+            .expect("Failed to run database migrations");
+
         Self { pool }
     }
 }

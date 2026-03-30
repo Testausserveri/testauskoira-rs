@@ -2,7 +2,8 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 use super::Database;
-use crate::{models::*, Message};
+use crate::models::*;
+use poise::serenity_prelude::Message;
 
 impl Database {
     pub async fn start_giveaway<S: Into<String>>(
@@ -14,8 +15,8 @@ impl Database {
     ) -> Result<i64, anyhow::Error> {
         use crate::schema::{Giveaways as GiveawaysSchema, Giveaways::dsl::Giveaways};
         let giveaway = NewGiveaway {
-            message_id: message.id.0,
-            channel_id: message.channel_id.0,
+            message_id: message.id.get(),
+            channel_id: message.channel_id.get(),
             end_time,
             max_winners,
             prize: prize.into(),
@@ -23,12 +24,12 @@ impl Database {
 
         diesel::insert_into(GiveawaysSchema::table)
             .values(&giveaway)
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(Giveaways
-            .filter(GiveawaysSchema::message_id.eq(message.id.0))
+            .filter(GiveawaysSchema::message_id.eq(message.id.get()))
             .select(GiveawaysSchema::id)
-            .first::<i64>(&self.pool.get()?)?)
+            .first::<i64>(&mut self.pool.get()?)?)
     }
 
     pub async fn end_giveaway(&self, giveaway_id: i64) -> Result<(), anyhow::Error> {
@@ -37,7 +38,7 @@ impl Database {
         diesel::update(Giveaways::table)
             .filter(Giveaways::id.eq(giveaway_id))
             .set(Giveaways::completed.eq(true))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(())
     }
@@ -47,11 +48,11 @@ impl Database {
 
         let giveaway = Giveaways
             .filter(GiveawaysSchema::id.eq(giveaway_id))
-            .first::<Giveaway>(&self.pool.get()?)?;
+            .first::<Giveaway>(&mut self.pool.get()?)?;
 
         diesel::delete(GiveawaysSchema::table)
             .filter(GiveawaysSchema::id.eq(giveaway_id))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(giveaway)
     }
@@ -61,7 +62,7 @@ impl Database {
 
         Ok(Giveaways
             .filter(id.eq(giveaway_id))
-            .first::<Giveaway>(&self.pool.get()?)?)
+            .first::<Giveaway>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_n_giveaways_with_offset(
@@ -74,19 +75,19 @@ impl Database {
         Ok(Giveaways
             .limit(n)
             .offset(offset)
-            .load::<Giveaway>(&self.pool.get()?)?)
+            .load::<Giveaway>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_giveaways(&self) -> Result<Vec<Giveaway>, anyhow::Error> {
         use crate::schema::Giveaways::dsl::*;
-        Ok(Giveaways.load::<Giveaway>(&self.pool.get()?)?)
+        Ok(Giveaways.load::<Giveaway>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_ongoing_giveaways(&self) -> Result<Vec<Giveaway>, anyhow::Error> {
         use crate::schema::Giveaways::dsl::*;
         Ok(Giveaways
             .filter(completed.eq(false))
-            .load::<Giveaway>(&self.pool.get()?)?)
+            .load::<Giveaway>(&mut self.pool.get()?)?)
     }
 
     pub async fn get_giveaway_winners(
@@ -97,7 +98,7 @@ impl Database {
 
         Ok(GiveawayWinners
             .filter(giveaway_id.eq(filter_giveaway_id))
-            .load::<GiveawayWinner>(&self.pool.get()?)?)
+            .load::<GiveawayWinner>(&mut self.pool.get()?)?)
     }
 
     pub async fn set_giveaway_completed(
@@ -110,7 +111,7 @@ impl Database {
         diesel::update(Giveaways::table)
             .filter(Giveaways::id.eq(giveaway_id))
             .set(Giveaways::completed.eq(completed))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(())
     }
@@ -125,7 +126,7 @@ impl Database {
         diesel::delete(GiveawayWinners::table)
             .filter(GiveawayWinners::giveaway_id.eq(giveaway_id))
             .filter(GiveawayWinners::user_id.eq_any(winners))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         diesel::insert_into(GiveawayWinners::table)
             .values(
@@ -137,7 +138,7 @@ impl Database {
                     })
                     .collect::<Vec<NewGiveawayWinner>>(),
             )
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(())
     }
@@ -153,7 +154,7 @@ impl Database {
             .filter(GiveawayWinners::giveaway_id.eq(giveaway_id))
             .filter(GiveawayWinners::user_id.eq_any(winners))
             .set(GiveawayWinners::rerolled.eq(true))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(())
     }
@@ -167,11 +168,11 @@ impl Database {
 
         diesel::update(Giveaways.filter(id.eq(giveaway_id)))
             .set(end_time.eq(new_value))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(Giveaways
             .filter(id.eq(giveaway_id))
-            .first::<Giveaway>(&self.pool.get()?)?)
+            .first::<Giveaway>(&mut self.pool.get()?)?)
     }
 
     pub async fn edit_giveaway_max_winners(
@@ -183,10 +184,10 @@ impl Database {
 
         diesel::update(Giveaways.filter(id.eq(giveaway_id)))
             .set(max_winners.eq(new_value))
-            .execute(&self.pool.get()?)?;
+            .execute(&mut self.pool.get()?)?;
 
         Ok(Giveaways
             .filter(id.eq(giveaway_id))
-            .first::<Giveaway>(&self.pool.get()?)?)
+            .first::<Giveaway>(&mut self.pool.get()?)?)
     }
 }
